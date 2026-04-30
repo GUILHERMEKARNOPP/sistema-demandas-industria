@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Demand, Category, Priority } from '../types';
+import type { Demand, Category, Priority } from '../types';
 import { X } from 'lucide-react';
 
 interface DemandFormProps {

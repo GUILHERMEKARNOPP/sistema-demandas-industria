@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Demand, Status } from '../types';
-import { X, Clock, User, Calendar, Tag, AlertCircle } from 'lucide-react';
+import type { Demand, Status } from '../types';
+import { X, User, Calendar, Tag, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -17,15 +17,6 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
     const newStatus = e.target.value as Status;
     setStatus(newStatus);
     onUpdateStatus(demand.id, newStatus);
-  };
-
-  const getPriorityColor = (p: string) => {
-    switch(p) {
-      case 'Crítica': return '#f87171';
-      case 'Alta': return '#fbbf24';
-      case 'Média': return '#60a5fa';
-      default: return '#34d399';
-    }
   };
 
   return (

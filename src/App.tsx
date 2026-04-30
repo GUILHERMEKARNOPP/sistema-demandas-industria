@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Demand, Status } from './types';
+import { useState, useEffect } from 'react';
+import type { Demand, Status } from './types';
 import { DemandForm } from './components/DemandForm';
 import { DemandDetails } from './components/DemandDetails';
-import { Plus, Search, Filter, Wrench, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Plus, Filter, Wrench, CheckCircle, AlertTriangle } from 'lucide-react';
 
 function App() {
   const [demands, setDemands] = useState<Demand[]>([]);
