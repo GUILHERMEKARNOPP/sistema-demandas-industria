@@ -60,7 +60,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
       partId: uuidv4(),
       name: partName,
       quantityUsed: partQty,
-      totalCost: partQty * partCost
+      totalCost: partQty * (partCost || 0)
     };
     
     const updatedParts = [...partsUsed, newPart];
@@ -69,26 +69,46 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
     const totalCost = updatedParts.reduce((acc, p) => acc + p.totalCost, 0);
     
     // Se custo ultrapassar o limite, dispara aprovação obrigatória
-    if (totalCost >= APPROVAL_COST_THRESHOLD && !demand.approvedByAdmin) {
-      await updateDemand(demand.id, {
+    // Re-dispara aprovação se o custo subir acima do threshold mesmo se já tivesse sido aprovado anteriormente (segurança)
+    if (totalCost >= APPROVAL_COST_THRESHOLD && (!demand.approvedByAdmin || totalCost > (demand.totalCost || 0))) {
+      const updates: Partial<Demand> = {
         partsUsed: updatedParts,
         totalCost,
         status: 'Aguardando Aprovação',
         approvalRequestedAt: new Date().toISOString(),
-      });
+      };
+      
+      // Se já estava aprovado mas o custo subiu, reseta a aprovação
+      if (demand.approvedByAdmin) {
+        updates.approvedByAdmin = false;
+        updates.approvedAt = undefined;
+        updates.approvedByName = undefined;
+      }
+
+      await updateDemand(demand.id, updates);
       setStatus('Aguardando Aprovação');
       onUpdateStatus(demand.id, 'Aguardando Aprovação');
+      
       sendPushNotification('aprovacao_pendente', {
         id: demand.id, title: demand.title, cost: totalCost.toFixed(2)
       });
       playNotificationSound();
-      toast('⚠️ Custo acima de R$ ' + APPROVAL_COST_THRESHOLD + '. Enviado para aprovação do Admin.', { icon: '🔒', duration: 5000 });
+      toast('⚠️ Custo excedeu o limite. Nova aprovação necessária.', { icon: '🔒', duration: 5000 });
     } else {
       await updateDemand(demand.id, { partsUsed: updatedParts, totalCost });
       toast.success('Peça adicionada ao custo!');
     }
     
     setPartName(''); setPartQty(1); setPartCost(0);
+  };
+
+  const handleRemovePart = async (partId: string) => {
+    const updatedParts = partsUsed.filter(p => p.partId !== partId);
+    setPartsUsed(updatedParts);
+    const totalCost = updatedParts.reduce((acc, p) => acc + p.totalCost, 0);
+    
+    await updateDemand(demand.id, { partsUsed: updatedParts, totalCost });
+    toast.success('Peça removida.');
   };
 
   const handleCompleteWithSignature = async () => {
@@ -283,7 +303,17 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
                     {partsUsed.map(p => (
                       <tr key={p.partId} style={{ borderBottom: '1px solid var(--surface-border)' }}>
                         <td style={{ padding: '0.5rem 0' }}>{p.quantityUsed}x {p.name}</td>
-                        <td style={{ padding: '0.5rem 0', textAlign: 'right' }}>R$ {p.totalCost.toFixed(2)}</td>
+                        <td style={{ padding: '0.5rem 0', textAlign: 'right' }}>
+                          R$ {p.totalCost.toFixed(2)}
+                          {canEditStatus && status !== 'Concluído' && (
+                            <button 
+                              onClick={() => handleRemovePart(p.partId)}
+                              style={{ background: 'transparent', border: 'none', color: 'var(--danger-color)', cursor: 'pointer', marginLeft: '0.5rem' }}
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                     <tr>

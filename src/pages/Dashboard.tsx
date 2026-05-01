@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Demand, Status } from '../types';
 import { DemandForm } from '../components/DemandForm';
 import { DemandDetails } from '../components/DemandDetails';
@@ -13,7 +13,7 @@ export const Dashboard: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedDemand, setSelectedDemand] = useState<Demand | null>(null);
   const [filter, setFilter] = useState<Status | 'Todas'>('Todas');
-  const [prevDemandCount, setPrevDemandCount] = useState<number | null>(null);
+  const prevDemandCountRef = useRef<number | null>(null);
 
   useEffect(() => {
     // Solicita permissão de notificação push na primeira vez
@@ -23,8 +23,9 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const unsubscribe = subscribeToDemands((data) => {
       // Detecta novos chamados para push notification
-      if (prevDemandCount !== null && data.length > prevDemandCount) {
+      if (prevDemandCountRef.current !== null && data.length > prevDemandCountRef.current) {
         const newest = data[0];
+        // Notifica apenas se for um novo chamado e não for do próprio usuário
         if (newest && newest.userId !== user?.id) {
           sendPushNotification('novo_chamado', {
             id: newest.id,
@@ -35,16 +36,20 @@ export const Dashboard: React.FC = () => {
           playNotificationSound();
         }
       }
-      setPrevDemandCount(data.length);
+      prevDemandCountRef.current = data.length;
 
       setDemands(data);
+      
+      // Atualiza a demanda selecionada se houver mudanças no banco
       if (selectedDemand) {
         const updatedSelected = data.find(d => d.id === selectedDemand.id);
-        if (updatedSelected) setSelectedDemand(updatedSelected);
+        if (updatedSelected && JSON.stringify(updatedSelected) !== JSON.stringify(selectedDemand)) {
+          setSelectedDemand(updatedSelected);
+        }
       }
     });
     return () => unsubscribe();
-  }, [selectedDemand?.id, prevDemandCount]);
+  }, [user?.id]); // Removido selectedDemand?.id e prevDemandCount para evitar loops e re-inscrições desnecessárias
 
   const handleAddDemand = () => {
     setIsFormOpen(false);
