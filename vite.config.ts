@@ -28,4 +28,7 @@ export default defineConfig({
     })
   ],
   base: '/sistema-demandas-industria/',
+  build: {
+    chunkSizeWarningLimit: 1500,
+  },
 })
