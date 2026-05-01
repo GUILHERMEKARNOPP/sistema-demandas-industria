@@ -275,7 +275,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
             )}
 
             {/* Avaliação do Solicitante */}
-            {demand.status === 'Concluído' && isRequester && !rating && (
+            {status === 'Concluído' && (isRequester || user?.role === 'ADMIN') && !rating && (
                <div style={{ padding: '1.5rem', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', marginBottom: '2rem' }}>
                  <h3 style={{ fontSize: '1rem', marginBottom: '1rem', textAlign: 'center' }}>Avalie o Atendimento</h3>
                  <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
