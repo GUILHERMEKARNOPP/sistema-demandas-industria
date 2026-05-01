@@ -1,7 +1,10 @@
 export type Priority = 'Baixa' | 'Média' | 'Alta' | 'Crítica';
-export type Status = 'Pendente' | 'Em andamento' | 'Aguardando Aprovação' | 'Concluído';
+export type Status = 'Pendente' | 'Em andamento' | 'Aguardando Aprovação' | 'Reprovado' | 'Concluído';
 export type Category = 'Estruturas' | 'Mobiliário' | 'Equipamentos' | 'Infraestrutura Administrativa';
 export type UserRole = 'SOLICITANTE' | 'TECNICO' | 'ADMIN';
+
+// Limite de custo que dispara aprovação obrigatória do Admin (em R$)
+export const APPROVAL_COST_THRESHOLD = 500;
 
 export interface User {
   id: string;
@@ -44,13 +47,20 @@ export interface Demand {
   comments?: Comment[];
   slaDeadline?: string;
   
-  // New Fields
+  // Enterprise Fields
   partsUsed?: DemandPart[];
   totalCost?: number;
   rating?: number; // 1 to 5
   ratingComment?: string;
   signatureUrl?: string; // Base64 or URL of the digital signature
-  approvedByAdmin?: boolean; // For expensive parts
+  
+  // Sistema de Aprovação (Alçadas)
+  approvedByAdmin?: boolean;
+  approvalRequestedAt?: string; // Data/hora que entrou em aprovação
+  approvedAt?: string;          // Data/hora da aprovação
+  approvedByName?: string;      // Nome do admin que aprovou
+  rejectionReason?: string;     // Motivo da reprovação
+  
   preventive?: boolean; // Is it a preventive maintenance?
 }
 

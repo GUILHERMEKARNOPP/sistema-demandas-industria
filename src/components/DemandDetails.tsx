@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import type { Demand, Status, Comment, DemandPart } from '../types';
-import { X, User, Calendar, Tag, AlertCircle, Clock, Image as ImageIcon, MessageSquare, Send, Wrench, Star, CheckCircle } from 'lucide-react';
+import { APPROVAL_COST_THRESHOLD } from '../types';
+import { X, User, Calendar, Tag, AlertCircle, Clock, Image as ImageIcon, MessageSquare, Send, Wrench, Star, CheckCircle, ShieldAlert, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,6 +9,7 @@ import { addComment, updateDemand } from '../lib/demandService';
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
 import SignatureCanvas from 'react-signature-canvas';
+import { sendPushNotification, playNotificationSound } from '../lib/notificationService';
 
 interface DemandDetailsProps {
   demand: Demand;
@@ -27,6 +29,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
   
   const [rating, setRating] = useState<number>(demand.rating || 0);
   const ratingComment = demand.ratingComment || '';
+  const [rejectionReason, setRejectionReason] = useState('');
   
   const sigPad = useRef<any>(null);
   const [showSignature, setShowSignature] = useState(false);
@@ -37,15 +40,21 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
     const newStatus = e.target.value as Status;
     if (newStatus === 'Concluído' && user?.role === 'TECNICO') {
       setShowSignature(true);
-      return; // Stop here until signature is saved
+      return;
     }
     
     setStatus(newStatus);
     onUpdateStatus(demand.id, newStatus);
     toast.success(`Status alterado para ${newStatus}`);
+
+    // Notificação push ao solicitante
+    sendPushNotification('status_alterado', {
+      id: demand.id, title: demand.title, status: newStatus
+    });
+    playNotificationSound();
   };
 
-  const handleAddPart = () => {
+  const handleAddPart = async () => {
     if (!partName.trim() || partQty <= 0) return;
     const newPart: DemandPart = {
       partId: uuidv4(),
@@ -58,10 +67,28 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
     setPartsUsed(updatedParts);
     
     const totalCost = updatedParts.reduce((acc, p) => acc + p.totalCost, 0);
-    updateDemand(demand.id, { partsUsed: updatedParts, totalCost });
+    
+    // Se custo ultrapassar o limite, dispara aprovação obrigatória
+    if (totalCost >= APPROVAL_COST_THRESHOLD && !demand.approvedByAdmin) {
+      await updateDemand(demand.id, {
+        partsUsed: updatedParts,
+        totalCost,
+        status: 'Aguardando Aprovação',
+        approvalRequestedAt: new Date().toISOString(),
+      });
+      setStatus('Aguardando Aprovação');
+      onUpdateStatus(demand.id, 'Aguardando Aprovação');
+      sendPushNotification('aprovacao_pendente', {
+        id: demand.id, title: demand.title, cost: totalCost.toFixed(2)
+      });
+      playNotificationSound();
+      toast('⚠️ Custo acima de R$ ' + APPROVAL_COST_THRESHOLD + '. Enviado para aprovação do Admin.', { icon: '🔒', duration: 5000 });
+    } else {
+      await updateDemand(demand.id, { partsUsed: updatedParts, totalCost });
+      toast.success('Peça adicionada ao custo!');
+    }
     
     setPartName(''); setPartQty(1); setPartCost(0);
-    toast.success('Peça adicionada ao custo!');
   };
 
   const handleCompleteWithSignature = async () => {
@@ -84,6 +111,38 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
     toast.success('Obrigado pela sua avaliação!');
   };
 
+  // === Sistema de Aprovação (Alçadas) ===
+  const handleApprove = async () => {
+    await updateDemand(demand.id, {
+      approvedByAdmin: true,
+      approvedAt: new Date().toISOString(),
+      approvedByName: user?.name || 'Admin',
+      status: 'Em andamento',
+    });
+    setStatus('Em andamento');
+    onUpdateStatus(demand.id, 'Em andamento');
+    sendPushNotification('aprovacao_concedida', { id: demand.id, title: demand.title });
+    playNotificationSound();
+    toast.success('Chamado aprovado! O técnico foi notificado.');
+  };
+
+  const handleReject = async () => {
+    if (!rejectionReason.trim()) {
+      toast.error('Informe o motivo da reprovação.');
+      return;
+    }
+    await updateDemand(demand.id, {
+      approvedByAdmin: false,
+      rejectionReason,
+      status: 'Reprovado',
+    });
+    setStatus('Reprovado');
+    onUpdateStatus(demand.id, 'Reprovado');
+    sendPushNotification('aprovacao_recusada', { id: demand.id, title: demand.title, reason: rejectionReason });
+    playNotificationSound();
+    toast.success('Chamado reprovado.');
+  };
+
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCommentText.trim() || !user) return;
@@ -99,6 +158,12 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
     await addComment(demand.id, demand.comments || [], comment);
     setNewCommentText('');
     toast.success('Atualização registrada');
+    
+    // Notificação push para o outro participante
+    sendPushNotification('novo_comentario', {
+      id: demand.id, title: demand.title, author: user.name
+    });
+    playNotificationSound();
   };
 
   const canEditStatus = user?.role === 'ADMIN' || user?.role === 'TECNICO';
@@ -232,14 +297,64 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
               </div>
             )}
 
-            {canEditStatus && demand.status !== 'Concluído' && !showSignature && (
+            {/* === PAINEL DE APROVAÇÃO (Alçadas) — Somente Admin === */}
+            {status === 'Aguardando Aprovação' && user?.role === 'ADMIN' && (
+              <div style={{ padding: '1.5rem', backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '2px solid #f59e0b', borderRadius: '12px', marginBottom: '2rem' }}>
+                <h3 style={{ fontSize: '1.1rem', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f59e0b' }}>
+                  <ShieldAlert size={20} /> Aprovação de Custo Necessária
+                </h3>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                  O custo deste chamado ultrapassou <strong>R$ {APPROVAL_COST_THRESHOLD.toFixed(2)}</strong>.
+                  Custo atual: <strong style={{ color: 'var(--danger-color)' }}>R$ {(demand.totalCost || partsUsed.reduce((a, p) => a + p.totalCost, 0)).toFixed(2)}</strong>
+                </p>
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label className="form-label">Motivo (caso reprove)</label>
+                  <input type="text" className="form-control" placeholder="Ex: Orçamento excedido para este mês" value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button className="btn btn-primary" onClick={handleApprove} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <ThumbsUp size={18} /> Aprovar
+                  </button>
+                  <button className="btn btn-outline" onClick={handleReject} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderColor: 'var(--danger-color)', color: 'var(--danger-color)' }}>
+                    <ThumbsDown size={18} /> Reprovar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Aviso para Técnico quando aguardando aprovação */}
+            {status === 'Aguardando Aprovação' && user?.role === 'TECNICO' && (
+              <div style={{ padding: '1.5rem', backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px dashed #f59e0b', borderRadius: '12px', marginBottom: '2rem', textAlign: 'center' }}>
+                <ShieldAlert size={32} color="#f59e0b" style={{ marginBottom: '0.5rem' }} />
+                <h3 style={{ fontSize: '1rem', color: '#f59e0b' }}>Aguardando Aprovação do Administrador</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                  O custo do reparo excedeu o limite. Você será notificado assim que o Admin aprovar.
+                </p>
+              </div>
+            )}
+
+            {/* Exibição de Reprovação */}
+            {status === 'Reprovado' && demand.rejectionReason && (
+              <div style={{ padding: '1.5rem', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger-color)', borderRadius: '12px', marginBottom: '2rem' }}>
+                <h3 style={{ fontSize: '1rem', color: 'var(--danger-color)', marginBottom: '0.5rem' }}>❌ Chamado Reprovado</h3>
+                <p style={{ fontSize: '0.9rem' }}>Motivo: <em>{demand.rejectionReason}</em></p>
+              </div>
+            )}
+
+            {/* Exibição de Aprovação Concedida */}
+            {demand.approvedByAdmin && demand.approvedAt && (
+              <div style={{ padding: '0.75rem 1rem', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', borderRadius: '8px', marginBottom: '2rem', fontSize: '0.85rem', color: '#10b981' }}>
+                ✅ Aprovado por <strong>{demand.approvedByName}</strong> em {format(new Date(demand.approvedAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+              </div>
+            )}
+
+            {canEditStatus && status !== 'Concluído' && status !== 'Aguardando Aprovação' && status !== 'Reprovado' && !showSignature && (
               <div style={{ borderTop: '1px solid var(--surface-border)', paddingTop: '1.5rem', marginBottom: '2rem' }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: '1rem' }}>Gerenciar Solicitação</h3>
                 <div className="form-group">
                   <label className="form-label">Atualizar Status</label>
                   <select className="form-control" value={status} onChange={handleStatusChange}>
                     <option value="Pendente">Pendente</option>
-                    <option value="Aguardando Aprovação">Aguardando Aprovação</option>
                     <option value="Em andamento">Em andamento</option>
                     <option value="Concluído">Concluído (Assinatura)</option>
                   </select>

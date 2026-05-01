@@ -3,8 +3,9 @@ import type { Demand, Status } from '../types';
 import { DemandForm } from '../components/DemandForm';
 import { DemandDetails } from '../components/DemandDetails';
 import { subscribeToDemands, updateDemandStatus } from '../lib/demandService';
-import { Plus, Filter, Wrench, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
+import { Plus, Filter, Wrench, CheckCircle, AlertTriangle, Clock, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { requestNotificationPermission, sendPushNotification, playNotificationSound } from '../lib/notificationService';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -12,9 +13,30 @@ export const Dashboard: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedDemand, setSelectedDemand] = useState<Demand | null>(null);
   const [filter, setFilter] = useState<Status | 'Todas'>('Todas');
+  const [prevDemandCount, setPrevDemandCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Solicita permissão de notificação push na primeira vez
+    requestNotificationPermission();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeToDemands((data) => {
+      // Detecta novos chamados para push notification
+      if (prevDemandCount !== null && data.length > prevDemandCount) {
+        const newest = data[0];
+        if (newest && newest.userId !== user?.id) {
+          sendPushNotification('novo_chamado', {
+            id: newest.id,
+            title: newest.title,
+            requester: newest.requesterName,
+            priority: newest.priority,
+          });
+          playNotificationSound();
+        }
+      }
+      setPrevDemandCount(data.length);
+
       setDemands(data);
       if (selectedDemand) {
         const updatedSelected = data.find(d => d.id === selectedDemand.id);
@@ -22,7 +44,7 @@ export const Dashboard: React.FC = () => {
       }
     });
     return () => unsubscribe();
-  }, [selectedDemand?.id]);
+  }, [selectedDemand?.id, prevDemandCount]);
 
   const handleAddDemand = () => {
     setIsFormOpen(false);
@@ -56,6 +78,7 @@ export const Dashboard: React.FC = () => {
   const pendingDemands = visibleDemands.filter(d => d.status === 'Pendente').length;
   const inProgressDemands = visibleDemands.filter(d => d.status === 'Em andamento').length;
   const completedDemands = visibleDemands.filter(d => d.status === 'Concluído').length;
+  const awaitingApproval = visibleDemands.filter(d => d.status === 'Aguardando Aprovação').length;
 
   return (
     <>
@@ -98,6 +121,15 @@ export const Dashboard: React.FC = () => {
           </div>
           <span style={{ fontSize: '2rem', fontWeight: 700 }}>{completedDemands}</span>
         </div>
+        {(user?.role === 'ADMIN' || user?.role === 'TECNICO') && awaitingApproval > 0 && (
+          <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid #f59e0b' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ color: '#f59e0b' }}>Aguardando Aprovação</span>
+              <ShieldAlert size={20} color="#f59e0b" />
+            </div>
+            <span style={{ fontSize: '2rem', fontWeight: 700, color: '#f59e0b' }}>{awaitingApproval}</span>
+          </div>
+        )}
       </div>
 
       <div className="glass-panel" style={{ padding: '2rem' }}>
@@ -107,6 +139,7 @@ export const Dashboard: React.FC = () => {
             <option value="Todas">Todas</option>
             <option value="Pendente">Pendentes</option>
             <option value="Em andamento">Em andamento</option>
+            <option value="Aguardando Aprovação">Aguardando Aprovação</option>
             <option value="Concluído">Concluídas</option>
           </select>
         </div>
