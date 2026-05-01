@@ -119,3 +119,10 @@ export const updateDemand = async (demandId: string, updates: Partial<Demand>) =
   const demandRef = doc(db, DEMANDS_COLLECTION, demandId);
   await updateDoc(demandRef, { ...updates, updatedAt });
 };
+
+export const uploadSignature = async (demandId: string, signatureBlob: Blob): Promise<string> => {
+  if (!isFirebaseConfigured) return '';
+  const storageRef = ref(storage, `signatures/${demandId}_signature.png`);
+  await uploadBytes(storageRef, signatureBlob);
+  return await getDownloadURL(storageRef);
+};

@@ -5,7 +5,7 @@ import { X, User, Calendar, Tag, AlertCircle, Clock, Image as ImageIcon, Message
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../contexts/AuthContext';
-import { addComment, updateDemand } from '../lib/demandService';
+import { addComment, updateDemand, uploadSignature } from '../lib/demandService';
 import { v4 as uuidv4 } from 'uuid';
 import toast from 'react-hot-toast';
 import SignatureCanvas from 'react-signature-canvas';
@@ -33,6 +33,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
   
   const sigPad = useRef<any>(null);
   const [showSignature, setShowSignature] = useState(false);
+  const [isConcluding, setIsConcluding] = useState(false);
   
   const { user } = useAuth();
 
@@ -112,21 +113,31 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
   };
 
   const handleCompleteWithSignature = async () => {
+    if (isConcluding) return;
+    
     try {
       if (!sigPad.current || sigPad.current.isEmpty()) {
         toast.error('Por favor, assine para concluir.');
         return;
       }
       
+      setIsConcluding(true);
       const canvas = sigPad.current.getTrimmedCanvas();
       if (!canvas) {
-        toast.error('Erro ao processar assinatura. Tente novamente.');
+        toast.error('Erro ao processar assinatura.');
+        setIsConcluding(false);
         return;
       }
 
-      const signatureUrl = canvas.toDataURL('image/png');
+      // Converte o canvas para Blob para um upload mais eficiente e seguro
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b: Blob) => resolve(b), 'image/png');
+      });
+
+      // 1. Upload da assinatura para o Storage (evita erro de Payload Too Large)
+      const signatureUrl = await uploadSignature(demand.id, blob);
       
-      // Atualiza tudo em uma única chamada para evitar inconsistências
+      // 2. Atualiza o status no Firestore
       await updateDemand(demand.id, { 
         status: 'Concluído', 
         signatureUrl,
@@ -137,17 +148,18 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
       setShowSignature(false);
       toast.success('Chamado concluído com sucesso!');
       
-      // Notifica o sistema que o status mudou (opcional se o snapshot já atualizar)
       onUpdateStatus(demand.id, 'Concluído');
       
-      // Fecha o modal após um pequeno delay para o usuário ver o sucesso
       setTimeout(() => {
         onClose();
       }, 1500);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao concluir chamado:', error);
-      toast.error('Erro ao salvar conclusão. Verifique sua conexão.');
+      // Mostra o erro real para ajudar no diagnóstico se persistir
+      toast.error(`Erro: ${error.message || 'Verifique sua conexão'}`);
+    } finally {
+      setIsConcluding(false);
     }
   };
 
@@ -432,7 +444,9 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
                 </div>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                   <button className="btn btn-outline" onClick={() => sigPad.current?.clear()}>Limpar</button>
-                  <button className="btn btn-primary" onClick={handleCompleteWithSignature}><CheckCircle size={18}/> Concluir Chamado</button>
+                  <button className="btn btn-primary" onClick={handleCompleteWithSignature} disabled={isConcluding}>
+                    <CheckCircle size={18}/> {isConcluding ? 'Processando...' : 'Concluir Chamado'}
+                  </button>
                 </div>
               </div>
             )}
