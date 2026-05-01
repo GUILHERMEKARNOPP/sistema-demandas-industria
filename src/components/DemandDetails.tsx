@@ -112,17 +112,43 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
   };
 
   const handleCompleteWithSignature = async () => {
-    if (sigPad.current?.isEmpty()) {
-      toast.error('Por favor, assine para concluir.');
-      return;
+    try {
+      if (!sigPad.current || sigPad.current.isEmpty()) {
+        toast.error('Por favor, assine para concluir.');
+        return;
+      }
+      
+      const canvas = sigPad.current.getTrimmedCanvas();
+      if (!canvas) {
+        toast.error('Erro ao processar assinatura. Tente novamente.');
+        return;
+      }
+
+      const signatureUrl = canvas.toDataURL('image/png');
+      
+      // Atualiza tudo em uma única chamada para evitar inconsistências
+      await updateDemand(demand.id, { 
+        status: 'Concluído', 
+        signatureUrl,
+        updatedAt: new Date().toISOString()
+      });
+
+      setStatus('Concluído');
+      setShowSignature(false);
+      toast.success('Chamado concluído com sucesso!');
+      
+      // Notifica o sistema que o status mudou (opcional se o snapshot já atualizar)
+      onUpdateStatus(demand.id, 'Concluído');
+      
+      // Fecha o modal após um pequeno delay para o usuário ver o sucesso
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+
+    } catch (error) {
+      console.error('Erro ao concluir chamado:', error);
+      toast.error('Erro ao salvar conclusão. Verifique sua conexão.');
     }
-    
-    const signatureUrl = sigPad.current?.getTrimmedCanvas().toDataURL('image/png');
-    await updateDemand(demand.id, { status: 'Concluído', signatureUrl });
-    setStatus('Concluído');
-    onUpdateStatus(demand.id, 'Concluído');
-    setShowSignature(false);
-    toast.success('Chamado concluído com sucesso!');
   };
 
   const handleRate = async (stars: number) => {
