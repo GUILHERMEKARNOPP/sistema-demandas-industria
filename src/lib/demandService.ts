@@ -102,3 +102,20 @@ export const addComment = async (demandId: string, comments: Comment[], newComme
   const demandRef = doc(db, DEMANDS_COLLECTION, demandId);
   await updateDoc(demandRef, { comments: updatedComments, updatedAt });
 };
+
+export const updateDemand = async (demandId: string, updates: Partial<Demand>) => {
+  const updatedAt = new Date().toISOString();
+  
+  if (!isFirebaseConfigured) {
+    const saved = localStorage.getItem('@grc:demands');
+    if (saved) {
+      const demands: Demand[] = JSON.parse(saved);
+      const updated = demands.map(d => d.id === demandId ? { ...d, ...updates, updatedAt } : d);
+      localStorage.setItem('@grc:demands', JSON.stringify(updated));
+    }
+    return;
+  }
+
+  const demandRef = doc(db, DEMANDS_COLLECTION, demandId);
+  await updateDoc(demandRef, { ...updates, updatedAt });
+};

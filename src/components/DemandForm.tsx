@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Category, Priority } from '../types';
 import { X, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,12 +15,22 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [department, setDepartment] = useState('');
+  const [machineId, setMachineId] = useState('');
   const [category, setCategory] = useState<Category>('Estruturas');
   const [priority, setPriority] = useState<Priority>('Baixa');
   const [consent, setConsent] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    // Auto-fill form from QR Code (URL Params)
+    const params = new URLSearchParams(window.location.search);
+    const depParam = params.get('department');
+    const machParam = params.get('machineId');
+    if (depParam) setDepartment(depParam);
+    if (machParam) setMachineId(machParam);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +48,7 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
         description,
         requesterName: user.name,
         department,
+        machineId,
         category,
         priority,
         status: 'Pendente' as const,
@@ -92,12 +103,12 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
           
           <div className="grid grid-cols-2" style={{ gap: '1rem' }}>
             <div className="form-group">
-              <label className="form-label">Nome do Solicitante</label>
-              <input type="text" className="form-control" value={user?.name || ''} disabled style={{ opacity: 0.7 }} />
+              <label className="form-label">Departamento / Setor</label>
+              <input required type="text" className="form-control" value={department} onChange={e => setDepartment(e.target.value)} placeholder="Ex: Produção" />
             </div>
             <div className="form-group">
-              <label className="form-label">Departamento / Setor</label>
-              <input required type="text" className="form-control" value={department} onChange={e => setDepartment(e.target.value)} placeholder="Seu departamento" />
+              <label className="form-label">Máquina/Ativo (Opcional - via QR Code)</label>
+              <input type="text" className="form-control" value={machineId} onChange={e => setMachineId(e.target.value)} placeholder="Ex: MAQ-01" />
             </div>
           </div>
           
