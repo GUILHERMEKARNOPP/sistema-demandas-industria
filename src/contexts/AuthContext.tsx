@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, UserRole } from '../types';
+import type { User, UserRole } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string) => void;
-  register: (name: string, email: string, role: UserRole) => void;
+  login: (email: string, password?: string) => void;
+  register: (name: string, email: string, role: UserRole, password?: string) => void;
   logout: () => void;
   users: User[];
 }

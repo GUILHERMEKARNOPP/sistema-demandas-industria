@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { UserRole } from '../types';
+import type { UserRole } from '../types';
 import { Shield } from 'lucide-react';
 
 export const Register: React.FC = () => {
