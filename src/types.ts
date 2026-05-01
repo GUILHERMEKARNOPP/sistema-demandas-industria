@@ -25,4 +25,15 @@ export interface Demand {
   updatedAt: string;
   userId: string; // The user who created the demand
   lgpdConsent: boolean; // LGPD required consent
+  imageUrl?: string;
+  comments?: Comment[];
+  slaDeadline?: string;
+}
+
+export interface Comment {
+  id: string;
+  text: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string;
 }

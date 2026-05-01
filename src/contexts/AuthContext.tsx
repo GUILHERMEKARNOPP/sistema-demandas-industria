@@ -1,76 +1,96 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User, UserRole } from '../types';
-import { v4 as uuidv4 } from 'uuid';
+import { auth, db } from '../lib/firebase';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from 'firebase/auth';
+import { doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password?: string) => void;
-  register: (name: string, email: string, role: UserRole, password?: string) => void;
-  logout: () => void;
+  login: (email: string, password?: string) => Promise<void>;
+  register: (name: string, email: string, role: UserRole, password?: string) => Promise<void>;
+  logout: () => Promise<void>;
   users: User[];
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Admin mock inicial
-const initialUsers: User[] = [
-  { id: 'admin-1', name: 'Administrador do Sistema', email: 'admin@empresa.com', role: 'ADMIN' },
-  { id: 'tech-1', name: 'Técnico João', email: 'joao.tecnico@empresa.com', role: 'TECNICO', phone: '5511999999999' }
-];
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [users, setUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('@grc:users');
-    return saved ? JSON.parse(saved) : initialUsers;
-  });
-  
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('@grc:auth');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fallback para quando as chaves não estiverem configuradas
+  const isFirebaseConfigured = !!import.meta.env.VITE_FIREBASE_API_KEY;
 
   useEffect(() => {
-    localStorage.setItem('@grc:users', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('@grc:auth', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('@grc:auth');
+    if (!isFirebaseConfigured) {
+      setLoading(false);
+      return;
     }
-  }, [user]);
 
-  const login = (email: string, password?: string) => {
-    const foundUser = users.find(u => u.email === email);
-    // Em um sistema real a senha seria criptografada e checada aqui.
-    // Como é mockup no localStorage, verificamos se tem a propriedade password.
-    if (foundUser) {
-      if (foundUser.password && foundUser.password !== password) {
-        throw new Error('Senha incorreta.');
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        if (userDoc.exists()) {
+          setUser({ id: firebaseUser.uid, ...userDoc.data() } as User);
+        }
+      } else {
+        setUser(null);
       }
-      setUser(foundUser);
-    } else {
-      throw new Error('Usuário não encontrado.');
+      setLoading(false);
+    });
+
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const usersData: User[] = [];
+      snapshot.forEach(doc => {
+        usersData.push({ id: doc.id, ...doc.data() } as User);
+      });
+      setUsers(usersData);
+    });
+
+    return () => {
+      unsubscribeAuth();
+      unsubscribeUsers();
+    };
+  }, [isFirebaseConfigured]);
+
+  const login = async (email: string, password?: string) => {
+    if (!isFirebaseConfigured) {
+      alert("Firebase não configurado. Por favor adicione as variáveis no .env");
+      return;
     }
+    if (!password) throw new Error("Senha obrigatória para Firebase");
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const register = (name: string, email: string, role: UserRole, password?: string) => {
-    if (users.find(u => u.email === email)) {
-      throw new Error('E-mail já cadastrado.');
+  const register = async (name: string, email: string, role: UserRole, password?: string) => {
+    if (!isFirebaseConfigured) {
+      alert("Firebase não configurado. Por favor adicione as variáveis no .env");
+      return;
     }
-    const newUser: User = { id: uuidv4(), name, email, role, password };
-    setUsers([...users, newUser]);
-    setUser(newUser);
+    if (!password) throw new Error("Senha obrigatória para Firebase");
+    
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const newUser = { name, email, role };
+    await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (isFirebaseConfigured) {
+      await signOut(auth);
+    }
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, users }}>
-      {children}
+    <AuthContext.Provider value={{ user, login, register, logout, users, loading }}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 };

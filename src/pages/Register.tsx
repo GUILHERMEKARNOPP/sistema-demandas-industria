@@ -14,7 +14,7 @@ export const Register: React.FC = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!consent) {
       setError('Você deve aceitar a Política de Privacidade (LGPD) para se cadastrar.');
@@ -25,10 +25,10 @@ export const Register: React.FC = () => {
       return;
     }
     try {
-      register(name, email, role, password);
+      await register(name, email, role, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Erro ao criar conta');
     }
   };
 

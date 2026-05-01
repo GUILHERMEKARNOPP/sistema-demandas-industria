@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import type { Demand, Status } from '../types';
 import { DemandForm } from '../components/DemandForm';
 import { DemandDetails } from '../components/DemandDetails';
-import { Plus, Filter, Wrench, CheckCircle, AlertTriangle } from 'lucide-react';
+import { subscribeToDemands, updateDemandStatus } from '../lib/demandService';
+import { Plus, Filter, Wrench, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Dashboard: React.FC = () => {
@@ -13,28 +14,34 @@ export const Dashboard: React.FC = () => {
   const [filter, setFilter] = useState<Status | 'Todas'>('Todas');
 
   useEffect(() => {
-    const saved = localStorage.getItem('@grc:demands');
-    if (saved) {
-      setDemands(JSON.parse(saved));
-    }
-  }, []);
+    const unsubscribe = subscribeToDemands((data) => {
+      setDemands(data);
+      if (selectedDemand) {
+        const updatedSelected = data.find(d => d.id === selectedDemand.id);
+        if (updatedSelected) setSelectedDemand(updatedSelected);
+      }
+    });
+    return () => unsubscribe();
+  }, [selectedDemand?.id]);
 
-  useEffect(() => {
-    localStorage.setItem('@grc:demands', JSON.stringify(demands));
-  }, [demands]);
-
-  const handleAddDemand = (demand: Demand) => {
-    setDemands(prev => [demand, ...prev]);
+  const handleAddDemand = () => {
     setIsFormOpen(false);
   };
 
-  const handleUpdateStatus = (id: string, newStatus: Status) => {
-    setDemands(prev => prev.map(d => 
-      d.id === id ? { ...d, status: newStatus, updatedAt: new Date().toISOString() } : d
-    ));
-    if (selectedDemand && selectedDemand.id === id) {
-      setSelectedDemand({ ...selectedDemand, status: newStatus, updatedAt: new Date().toISOString() });
-    }
+  const handleUpdateStatus = async (id: string, newStatus: Status) => {
+    await updateDemandStatus(id, newStatus);
+  };
+
+  // Calcula status de SLA
+  const getSlaStatus = (deadline?: string, status?: string) => {
+    if (!deadline || status === 'Concluído') return null;
+    const now = new Date();
+    const limit = new Date(deadline);
+    const diffHours = (limit.getTime() - now.getTime()) / (1000 * 60 * 60);
+    
+    if (diffHours < 0) return { label: 'Atrasado', color: 'var(--danger-color)' };
+    if (diffHours < 12) return { label: 'Vence em breve', color: '#f59e0b' };
+    return { label: 'No prazo', color: '#10b981' };
   };
 
   // Restrict visibility based on role
@@ -141,6 +148,12 @@ export const Dashboard: React.FC = () => {
                       <span className={`badge badge-priority-${demand.priority.toLowerCase().replace('é', 'e').replace('í', 'i')}`}>
                         {demand.priority}
                       </span>
+                      {getSlaStatus(demand.slaDeadline, demand.status) && (
+                        <div style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: getSlaStatus(demand.slaDeadline, demand.status)?.color, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Clock size={12} />
+                          {getSlaStatus(demand.slaDeadline, demand.status)?.label}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '1rem' }}>
                       <span className={`badge badge-status-${demand.status.toLowerCase().replace(' ', '-').replace('í', 'i')}`}>

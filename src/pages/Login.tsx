@@ -10,13 +10,13 @@ export const Login: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      login(email, password);
+      await login(email, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Erro ao fazer login");
     }
   };
 

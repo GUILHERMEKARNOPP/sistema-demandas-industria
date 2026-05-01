@@ -3,17 +3,34 @@ import { useAuth } from '../contexts/AuthContext';
 import type { Demand } from '../types';
 import { Navigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { subscribeToDemands } from '../lib/demandService';
+import { Download } from 'lucide-react';
 
 export const AdminPanel: React.FC = () => {
   const { user, users } = useAuth();
   const [demands, setDemands] = useState<Demand[]>([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('@grc:demands');
-    if (saved) {
-      setDemands(JSON.parse(saved));
-    }
+    const unsubscribe = subscribeToDemands((data) => {
+      setDemands(data);
+    });
+    return () => unsubscribe();
   }, []);
+
+  const exportToCSV = () => {
+    const headers = ['ID,Título,Solicitante,Departamento,Categoria,Prioridade,Status,Data de Criação,Data Limite (SLA)'];
+    const rows = demands.map(d => 
+      `"${d.id}","${d.title}","${d.requesterName}","${d.department}","${d.category}","${d.priority}","${d.status}","${d.createdAt}","${d.slaDeadline || ''}"`
+    );
+    const csvContent = "data:text/csv;charset=utf-8," + headers.concat(rows).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `relatorio_manutencao_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (user?.role !== 'ADMIN') {
     return <Navigate to="/" replace />;
@@ -45,7 +62,13 @@ export const AdminPanel: React.FC = () => {
 
   return (
     <div>
-      <h2 style={{ marginBottom: '2rem' }}>Painel Administrativo - Métricas</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h2>Painel Administrativo - Métricas</h2>
+        <button className="btn btn-outline" onClick={exportToCSV} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Download size={18} />
+          Exportar Relatório (CSV)
+        </button>
+      </div>
 
       <div className="grid grid-cols-2" style={{ marginBottom: '2rem' }}>
         <div className="glass-panel" style={{ padding: '2rem' }}>

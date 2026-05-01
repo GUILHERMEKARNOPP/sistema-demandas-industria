@@ -1,25 +1,28 @@
 import React, { useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import type { Demand, Category, Priority } from '../types';
+import type { Category, Priority } from '../types';
 import { X, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
+import { addDemand } from '../lib/demandService';
+
 interface DemandFormProps {
-  onSubmit: (demand: Demand) => void;
+  onSubmit: () => void;
   onCancel: () => void;
 }
 
 export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) => {
-  const { user, users } = useAuth();
+  const { user } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [department, setDepartment] = useState('');
   const [category, setCategory] = useState<Category>('Estruturas');
   const [priority, setPriority] = useState<Priority>('Baixa');
   const [consent, setConsent] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!consent) {
       setError('O consentimento com a política LGPD é obrigatório.');
@@ -27,32 +30,37 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
     }
     
     if (!user) return;
+    setIsSubmitting(true);
 
-    const newDemand: Demand = {
-      id: uuidv4(),
-      title,
-      description,
-      requesterName: user.name,
-      department,
-      category,
-      priority,
-      status: 'Pendente',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      userId: user.id,
-      lgpdConsent: consent,
-    };
-    
-    onSubmit(newDemand);
+    try {
+      const demandData = {
+        title,
+        description,
+        requesterName: user.name,
+        department,
+        category,
+        priority,
+        status: 'Pendente' as const,
+        userId: user.id,
+        lgpdConsent: consent,
+      };
+      
+      await addDemand(demandData, imageFile || undefined);
+      
+      onSubmit();
 
-    // Enviar notificação WhatsApp para o primeiro Técnico encontrado (Simulação)
-    const tech = users.find(u => u.role === 'TECNICO' && u.phone);
-    const phone = tech?.phone || '5511999999999';
-    const message = `*Nova Solicitação de Reparo*\n\n*Título:* ${title}\n*Solicitante:* ${user.name}\n*Prioridade:* ${priority}\n*Categoria:* ${category}\n\n*Acesse o sistema para mais detalhes.*`;
-    
-    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(waUrl, '_blank');
+      // Enviar notificação WhatsApp para o número fixo configurado
+      const phone = '5547997417610';
+      const message = `*Nova Solicitação de Reparo*\n\n*Título:* ${title}\n*Solicitante:* ${user.name}\n*Prioridade:* ${priority}\n*Categoria:* ${category}\n\n*Acesse o sistema para mais detalhes.*`;
+      
+      const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
+    } catch (err: any) {
+      setError(err.message || 'Erro ao criar demanda');
+      setIsSubmitting(false);
+    }
   };
+
 
   return (
     <div className="modal-overlay" style={{
@@ -119,6 +127,17 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
             <textarea required className="form-control" rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder="Descreva o problema com o máximo de detalhes possível..."></textarea>
           </div>
 
+          <div className="form-group">
+            <label className="form-label">Anexar Foto (Opcional)</label>
+            <input 
+              type="file" 
+              accept="image/*" 
+              className="form-control" 
+              onChange={e => setImageFile(e.target.files?.[0] || null)}
+              style={{ padding: '0.5rem' }}
+            />
+          </div>
+
           <div className="form-group" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', padding: '1rem', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '8px' }}>
             <input 
               type="checkbox" 
@@ -134,8 +153,10 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
           </div>
           
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '2rem' }}>
-            <button type="button" className="btn btn-outline" onClick={onCancel}>Cancelar</button>
-            <button type="submit" className="btn btn-primary">Enviar Solicitação</button>
+            <button type="button" className="btn btn-outline" onClick={onCancel} disabled={isSubmitting}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Enviando...' : 'Enviar Solicitação'}
+            </button>
           </div>
         </form>
       </div>
