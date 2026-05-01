@@ -3,6 +3,7 @@ import type { Demand, Status } from '../types';
 import { X, User, Calendar, Tag, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useAuth } from '../contexts/AuthContext';
 
 interface DemandDetailsProps {
   demand: Demand;
@@ -12,12 +13,15 @@ interface DemandDetailsProps {
 
 export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateStatus, onClose }) => {
   const [status, setStatus] = useState<Status>(demand.status);
+  const { user } = useAuth();
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Status;
     setStatus(newStatus);
     onUpdateStatus(demand.id, newStatus);
   };
+
+  const canEditStatus = user?.role === 'ADMIN' || user?.role === 'TECNICO';
 
   return (
     <div className="modal-overlay" style={{
@@ -36,63 +40,65 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
             </div>
             <h2 style={{ marginTop: '0.5rem' }}>{demand.title}</h2>
           </div>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}>
             <X size={24} />
           </button>
         </div>
         
-        <div className="grid grid-cols-2" style={{ gap: '1.5rem', marginBottom: '2rem', backgroundColor: 'rgba(15, 23, 42, 0.4)', padding: '1rem', borderRadius: '8px' }}>
+        <div className="grid grid-cols-2" style={{ gap: '1.5rem', marginBottom: '2rem', backgroundColor: 'rgba(128, 128, 128, 0.1)', padding: '1rem', borderRadius: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <User size={18} color="#94a3b8" />
+            <User size={18} color="var(--text-secondary)" />
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Solicitante</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Solicitante</div>
               <div>{demand.requesterName}</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Tag size={18} color="#94a3b8" />
+            <Tag size={18} color="var(--text-secondary)" />
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Departamento</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Departamento</div>
               <div>{demand.department}</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <AlertCircle size={18} color="#94a3b8" />
+            <AlertCircle size={18} color="var(--text-secondary)" />
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Categoria</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Categoria</div>
               <div>{demand.category}</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Calendar size={18} color="#94a3b8" />
+            <Calendar size={18} color="var(--text-secondary)" />
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Data de Abertura</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Data de Abertura</div>
               <div>{format(new Date(demand.createdAt), "dd 'de' MMMM, yyyy", { locale: ptBR })}</div>
             </div>
           </div>
         </div>
         
         <div style={{ marginBottom: '2rem' }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: '#94a3b8' }}>Descrição do Problema</h3>
-          <p style={{ color: '#f8fafc', backgroundColor: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', whiteSpace: 'pre-wrap' }}>
+          <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Descrição do Problema</h3>
+          <p style={{ color: 'var(--text-primary)', backgroundColor: 'rgba(128,128,128,0.05)', padding: '1rem', borderRadius: '8px', whiteSpace: 'pre-wrap' }}>
             {demand.description}
           </p>
         </div>
         
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: '1rem' }}>Gerenciar Solicitação (Ação da Manutenção)</h3>
-          <div className="form-group">
-            <label className="form-label">Atualizar Status</label>
-            <select className="form-control" value={status} onChange={handleStatusChange}>
-              <option value="Pendente">Pendente</option>
-              <option value="Em andamento">Em andamento</option>
-              <option value="Concluído">Concluído</option>
-            </select>
+        {canEditStatus && (
+          <div style={{ borderTop: '1px solid var(--surface-border)', paddingTop: '1.5rem' }}>
+            <h3 style={{ fontSize: '1rem', marginBottom: '1rem' }}>Gerenciar Solicitação (Ação da Manutenção)</h3>
+            <div className="form-group">
+              <label className="form-label">Atualizar Status</label>
+              <select className="form-control" value={status} onChange={handleStatusChange}>
+                <option value="Pendente">Pendente</option>
+                <option value="Em andamento">Em andamento</option>
+                <option value="Concluído">Concluído</option>
+              </select>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              * Ao alterar o status, o solicitante poderá acompanhar a mudança no painel em tempo real.
+            </p>
           </div>
-          <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-            * Ao alterar o status, o solicitante poderá acompanhar a mudança no painel em tempo real.
-          </p>
-        </div>
+        )}
         
       </div>
     </div>

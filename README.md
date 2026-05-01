@@ -1,73 +1,51 @@
-# React + TypeScript + Vite
+# OptimaManutenção - Gestão de Reparos Corporativos
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Este é um sistema profissional e centralizado de Gestão de Manutenção e Reparos Corporativos, projetado para indústrias e empresas. O objetivo do sistema é facilitar a comunicação entre os colaboradores (solicitantes) e a equipe de manutenção (técnicos), substituindo processos informais e garantindo rastreabilidade, velocidade no atendimento e relatórios consistentes.
 
-Currently, two official plugins are available:
+## Funcionalidades
+- **Autenticação de Usuários:** Sistema com login e cadastro de usuários (Solicitante, Técnico, Administrador).
+- **Adequação LGPD:** Política de consentimento explícito (LGPD) no cadastro e na abertura de chamados.
+- **Painel de Controle:** Visualização das solicitações em andamento com indicadores visuais baseados na prioridade e status do chamado.
+- **Notificação Automática via WhatsApp:** Ao criar um chamado, um link direto com a API do WhatsApp é gerado para notificar o Técnico responsável imediatamente.
+- **Painel Administrativo:** Tela exclusiva para o Administrador com gráficos e estatísticas gerais (distribuição por status e categoria dos chamados) usando `recharts`.
+- **Tema Escuro/Claro:** O sistema conta com uma alternância (toggle) simples entre o Modo Claro (Light Mode) e Modo Escuro (Dark Mode).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Tecnologias Utilizadas
+- **React.js** e **Vite**
+- **TypeScript**
+- **React Router Dom** (Navegação estruturada)
+- **Recharts** (Gráficos no Painel Admin)
+- **Lucide-react** (Ícones modernos)
+- **UUID** & **Date-fns** (Utilitários)
+- **CSS Modules / Variáveis CSS** para temas e design responsivo (Glassmorphism e Neumorphism).
 
-## React Compiler
+## Rodando Localmente
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. Faça o clone do repositório:
+```bash
+git clone https://github.com/GUILHERMEKARNOPP/sistema-demandas-industria.git
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+2. Acesse a pasta:
+```bash
+cd "sistema-demandas-industria"
 ```
+
+3. Instale as dependências:
+```bash
+npm install
+```
+
+4. Rode o servidor de desenvolvimento:
+```bash
+npm run dev
+```
+
+## Como Fazer Deploy no GitHub Pages
+O projeto possui integração automática para Deploy via GH-Pages. Execute o comando abaixo para compilar a build e subir para a branch correspondente.
+
+```bash
+npm run deploy
+```
+
+> **Atenção:** Na primeira execução, verifique em `Settings -> Pages` no seu repositório do GitHub se a branch `gh-pages` está configurada como 'Source' para o build.

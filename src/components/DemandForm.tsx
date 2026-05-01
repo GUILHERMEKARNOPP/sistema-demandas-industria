@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Demand, Category, Priority } from '../types';
-import { X } from 'lucide-react';
+import { X, Shield } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface DemandFormProps {
   onSubmit: (demand: Demand) => void;
@@ -9,30 +10,48 @@ interface DemandFormProps {
 }
 
 export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) => {
+  const { user, users } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [requesterName, setRequesterName] = useState('');
   const [department, setDepartment] = useState('');
   const [category, setCategory] = useState<Category>('Estruturas');
   const [priority, setPriority] = useState<Priority>('Baixa');
+  const [consent, setConsent] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!consent) {
+      setError('O consentimento com a política LGPD é obrigatório.');
+      return;
+    }
     
+    if (!user) return;
+
     const newDemand: Demand = {
       id: uuidv4(),
       title,
       description,
-      requesterName,
+      requesterName: user.name,
       department,
       category,
       priority,
       status: 'Pendente',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      userId: user.id,
+      lgpdConsent: consent,
     };
     
     onSubmit(newDemand);
+
+    // Enviar notificação WhatsApp para o primeiro Técnico encontrado (Simulação)
+    const tech = users.find(u => u.role === 'TECNICO' && u.phone);
+    const phone = tech?.phone || '5511999999999';
+    const message = `*Nova Solicitação de Reparo*\n\n*Título:* ${title}\n*Solicitante:* ${user.name}\n*Prioridade:* ${priority}\n*Categoria:* ${category}\n\n*Acesse o sistema para mais detalhes.*`;
+    
+    const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
   };
 
   return (
@@ -46,11 +65,17 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <h2>Nova Solicitação de Manutenção</h2>
-          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}>
+          <button onClick={onCancel} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer' }}>
             <X size={24} />
           </button>
         </div>
         
+        {error && (
+          <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger-color)', padding: '0.75rem', borderRadius: '8px', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">Título da Solicitação</label>
@@ -60,11 +85,11 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
           <div className="grid grid-cols-2" style={{ gap: '1rem' }}>
             <div className="form-group">
               <label className="form-label">Nome do Solicitante</label>
-              <input required type="text" className="form-control" value={requesterName} onChange={e => setRequesterName(e.target.value)} />
+              <input type="text" className="form-control" value={user?.name || ''} disabled style={{ opacity: 0.7 }} />
             </div>
             <div className="form-group">
               <label className="form-label">Departamento / Setor</label>
-              <input required type="text" className="form-control" value={department} onChange={e => setDepartment(e.target.value)} />
+              <input required type="text" className="form-control" value={department} onChange={e => setDepartment(e.target.value)} placeholder="Seu departamento" />
             </div>
           </div>
           
@@ -92,6 +117,20 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
           <div className="form-group">
             <label className="form-label">Descrição Detalhada</label>
             <textarea required className="form-control" rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder="Descreva o problema com o máximo de detalhes possível..."></textarea>
+          </div>
+
+          <div className="form-group" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', padding: '1rem', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '8px' }}>
+            <input 
+              type="checkbox" 
+              id="demand-lgpd" 
+              checked={consent} 
+              onChange={(e) => setConsent(e.target.checked)} 
+              style={{ marginTop: '0.25rem' }}
+            />
+            <label htmlFor="demand-lgpd" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              <Shield size={14} style={{ display: 'inline', marginRight: '4px' }} />
+              <strong>Conformidade LGPD:</strong> Concordo em compartilhar as informações descritas acima com os técnicos de manutenção e a administração, incluindo o envio de notificação por WhatsApp com os dados da solicitação para fins de agilidade no atendimento.
+            </label>
           </div>
           
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '2rem' }}>
