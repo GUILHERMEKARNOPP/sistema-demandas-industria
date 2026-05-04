@@ -3,11 +3,11 @@ import type { Demand, Status, Comment, DemandPart } from '../types';
 import { APPROVAL_COST_THRESHOLD } from '../types';
 import { X, User, Calendar, Tag, AlertCircle, Clock, Image as ImageIcon, MessageSquare, Send, Wrench, Star, CheckCircle, ShieldAlert, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import * as locales from 'date-fns/locale';
+const ptBR = locales.ptBR;
 import { useAuth } from '../contexts/AuthContext';
-import { addComment, updateDemand, uploadSignature } from '../lib/demandService';
-import { v4 as uuidv4 } from 'uuid';
-import toast from 'react-hot-toast';
+import * as demandService from '../lib/demandService';
+import { toast } from 'react-hot-toast';
 import SignatureCanvas from 'react-signature-canvas';
 import { sendPushNotification, playNotificationSound } from '../lib/notificationService';
 
@@ -20,6 +20,8 @@ interface DemandDetailsProps {
 export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateStatus, onClose }) => {
   const [status, setStatus] = useState<Status>(demand.status);
   const [newCommentText, setNewCommentText] = useState('');
+  const [localComments, setLocalComments] = useState<Comment[]>(demand.comments || []);
+  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
   
   // Enterprise Features States
   const [partName, setPartName] = useState('');
@@ -58,7 +60,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
   const handleAddPart = async () => {
     if (!partName.trim() || partQty <= 0) return;
     const newPart: DemandPart = {
-      partId: uuidv4(),
+      partId: crypto.randomUUID(),
       name: partName,
       quantityUsed: partQty,
       totalCost: partQty * (partCost || 0)
@@ -86,7 +88,20 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
         updates.approvedByName = undefined;
       }
 
-      await updateDemand(demand.id, updates);
+      const approvalUpdates: Partial<Demand> = {
+        partsUsed: updatedParts,
+        totalCost,
+        status: 'Aguardando Aprovação',
+        approvalRequestedAt: new Date().toISOString(),
+      };
+      
+      if (demand.approvedByAdmin) {
+        approvalUpdates.approvedByAdmin = false;
+        approvalUpdates.approvedAt = undefined;
+        approvalUpdates.approvedByName = undefined;
+      }
+
+      await demandService.updateDemand(demand.id, approvalUpdates);
       setStatus('Aguardando Aprovação');
       onUpdateStatus(demand.id, 'Aguardando Aprovação');
       
@@ -96,7 +111,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
       playNotificationSound();
       toast('⚠️ Custo excedeu o limite. Nova aprovação necessária.', { icon: '🔒', duration: 5000 });
     } else {
-      await updateDemand(demand.id, { partsUsed: updatedParts, totalCost });
+      await demandService.updateDemand(demand.id, { partsUsed: updatedParts, totalCost });
       toast.success('Peça adicionada ao custo!');
     }
     
@@ -108,7 +123,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
     setPartsUsed(updatedParts);
     const totalCost = updatedParts.reduce((acc, p) => acc + p.totalCost, 0);
     
-    await updateDemand(demand.id, { partsUsed: updatedParts, totalCost });
+    await demandService.updateDemand(demand.id, { partsUsed: updatedParts, totalCost });
     toast.success('Peça removida.');
   };
 
@@ -129,16 +144,15 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
         return;
       }
 
-      // Converte o canvas para Blob para um upload mais eficiente e seguro
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b: Blob) => resolve(b), 'image/png');
-      });
+      // Converte o canvas para Blob de forma mais compatível
+      const dataUrl = canvas.toDataURL('image/png');
+      const blob = await (await fetch(dataUrl)).blob();
 
-      // 1. Upload da assinatura para o Storage (evita erro de Payload Too Large)
-      const signatureUrl = await uploadSignature(demand.id, blob);
+      // 1. Upload da assinatura para o Storage
+      const signatureUrl = await demandService.uploadSignature(demand.id, blob);
       
       // 2. Atualiza o status no Firestore
-      await updateDemand(demand.id, { 
+      await demandService.updateDemand(demand.id, { 
         status: 'Concluído', 
         signatureUrl,
         updatedAt: new Date().toISOString()
@@ -165,13 +179,13 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
 
   const handleRate = async (stars: number) => {
     setRating(stars);
-    await updateDemand(demand.id, { rating: stars, ratingComment });
+    await demandService.updateDemand(demand.id, { rating: stars, ratingComment });
     toast.success('Obrigado pela sua avaliação!');
   };
 
   // === Sistema de Aprovação (Alçadas) ===
   const handleApprove = async () => {
-    await updateDemand(demand.id, {
+    await demandService.updateDemand(demand.id, {
       approvedByAdmin: true,
       approvedAt: new Date().toISOString(),
       approvedByName: user?.name || 'Admin',
@@ -189,7 +203,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
       toast.error('Informe o motivo da reprovação.');
       return;
     }
-    await updateDemand(demand.id, {
+    await demandService.updateDemand(demand.id, {
       approvedByAdmin: false,
       rejectionReason,
       status: 'Reprovado',
@@ -206,22 +220,47 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
     if (!newCommentText.trim() || !user) return;
     
     const comment: Comment = {
-      id: uuidv4(),
+      id: crypto.randomUUID(),
       text: newCommentText,
       authorId: user.id,
       authorName: user.name,
       createdAt: new Date().toISOString()
     };
     
-    await addComment(demand.id, demand.comments || [], comment);
+    // Optimistic Update
+    setLocalComments(prev => [...prev, comment]);
     setNewCommentText('');
-    toast.success('Atualização registrada');
-    
-    // Notificação push para o outro participante
-    sendPushNotification('novo_comentario', {
-      id: demand.id, title: demand.title, author: user.name
-    });
-    playNotificationSound();
+
+    try {
+      await demandService.addComment(demand.id, demand.comments || [], comment);
+      toast.success('Mensagem enviada');
+      
+      // Notificação push para o outro participante
+      sendPushNotification('novo_comentario', {
+        id: demand.id, title: demand.title, author: user.name
+      });
+      playNotificationSound();
+    } catch (error) {
+      toast.error('Erro ao enviar mensagem');
+      // Revert optimistic update on failure
+      setLocalComments(prev => prev.filter(c => c.id !== comment.id));
+    }
+  };
+
+  const handleAddEvidence = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    try {
+      setIsUploadingEvidence(true);
+      const imageUrl = await demandService.uploadSignature(demand.id + '_evidence_' + Date.now(), file); // Reuse signature upload logic or generic upload
+      await demandService.updateDemand(demand.id, { imageUrl });
+      toast.success('Evidência enviada com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao enviar evidência');
+    } finally {
+      setIsUploadingEvidence(false);
+    }
   };
 
   const canEditStatus = user?.role === 'ADMIN' || user?.role === 'TECNICO';
@@ -314,6 +353,16 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
                   <ImageIcon size={16} /> Evidência Fotográfica
                 </h3>
                 <img src={demand.imageUrl} alt="Evidência" style={{ width: '100%', borderRadius: '8px', border: '1px solid var(--surface-border)', objectFit: 'cover' }} />
+              </div>
+            )}
+
+            {!demand.imageUrl && isRequester && status !== 'Concluído' && (
+              <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px', border: '1px dashed var(--primary-color)' }}>
+                <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <ImageIcon size={16} /> Adicionar Evidência
+                </h3>
+                <input type="file" accept="image/*" onChange={handleAddEvidence} disabled={isUploadingEvidence} />
+                {isUploadingEvidence && <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>Enviando imagem...</p>}
               </div>
             )}
             
@@ -497,18 +546,26 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
             </h3>
             
             <div style={{ flex: 1, backgroundColor: 'rgba(128,128,128,0.05)', borderRadius: '8px', padding: '1rem', overflowY: 'auto', maxHeight: '500px', display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1rem' }}>
-              {!demand.comments || demand.comments.length === 0 ? (
+              {localComments.length === 0 ? (
                 <p style={{ color: 'var(--text-secondary)', textAlign: 'center', margin: 'auto', fontSize: '0.9rem' }}>Nenhuma atualização registrada.</p>
               ) : (
-                demand.comments.map(c => (
-                  <div key={c.id} style={{ backgroundColor: 'var(--surface-color)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--surface-border)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--primary-color)' }}>{c.authorName}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{format(new Date(c.createdAt), "dd/MM HH:mm")}</span>
+                localComments.map(c => {
+                  let formattedDate = '';
+                  try {
+                    formattedDate = format(new Date(c.createdAt), "dd/MM HH:mm");
+                  } catch (e) {
+                    formattedDate = 'Data inválida';
+                  }
+                  return (
+                    <div key={c.id} style={{ backgroundColor: 'var(--surface-color)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--surface-border)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                        <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--primary-color)' }}>{c.authorName}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{formattedDate}</span>
+                      </div>
+                      <p style={{ fontSize: '0.9rem', margin: 0, whiteSpace: 'pre-wrap' }}>{c.text}</p>
                     </div>
-                    <p style={{ fontSize: '0.9rem', margin: 0, whiteSpace: 'pre-wrap' }}>{c.text}</p>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

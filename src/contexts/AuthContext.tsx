@@ -7,7 +7,7 @@ import {
   signOut, 
   onAuthStateChanged 
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -16,6 +16,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   users: User[];
   loading: boolean;
+  deleteUser: (userId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -88,8 +89,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const deleteUser = async (userId: string) => {
+    if (!isFirebaseConfigured) return;
+    if (userId === user?.id) {
+      alert("Você não pode deletar sua própria conta.");
+      return;
+    }
+    const userRef = doc(db, 'users', userId);
+    await deleteDoc(userRef);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, users, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, users, loading, deleteUser }}>
       {!loading && children}
     </AuthContext.Provider>
   );

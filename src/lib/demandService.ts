@@ -1,8 +1,7 @@
-import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { db, storage, auth } from './firebase';
 import type { Demand, Comment } from '../types';
-import { v4 as uuidv4 } from 'uuid';
 
 export const DEMANDS_COLLECTION = 'demands';
 
@@ -57,7 +56,7 @@ export const addDemand = async (demandData: Omit<Demand, 'id' | 'createdAt' | 'u
   };
 
   if (!isFirebaseConfigured) {
-    const newDemand = { id: uuidv4(), ...finalDemand } as Demand;
+    const newDemand = { id: crypto.randomUUID(), ...finalDemand } as Demand;
     const saved = localStorage.getItem('@grc:demands');
     const demands = saved ? JSON.parse(saved) : [];
     localStorage.setItem('@grc:demands', JSON.stringify([newDemand, ...demands]));
@@ -125,4 +124,25 @@ export const uploadSignature = async (demandId: string, signatureBlob: Blob): Pr
   const storageRef = ref(storage, `signatures/${demandId}_signature.png`);
   await uploadBytes(storageRef, signatureBlob);
   return await getDownloadURL(storageRef);
+};
+
+export const deleteDemand = async (demandId: string) => {
+  if (!isFirebaseConfigured) {
+    const saved = localStorage.getItem('@grc:demands');
+    if (saved) {
+      const demands: Demand[] = JSON.parse(saved);
+      const filtered = demands.filter(d => d.id !== demandId);
+      localStorage.setItem('@grc:demands', JSON.stringify(filtered));
+    }
+    return;
+  }
+
+  const demandRef = doc(db, DEMANDS_COLLECTION, demandId);
+  await deleteDoc(demandRef);
+};
+
+export const deleteUserFirestore = async (userId: string) => {
+  if (!isFirebaseConfigured) return;
+  const userRef = doc(db, 'users', userId);
+  await deleteDoc(userRef);
 };
