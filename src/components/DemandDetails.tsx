@@ -138,8 +138,15 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
       }
       
       setIsConcluding(true);
-      const canvas = sigPad.current.getTrimmedCanvas();
-      // Converte o canvas para Blob de forma mais compatível para o service
+      // Usamos getCanvas() em vez de getTrimmedCanvas() para evitar um bug conhecido 
+      // de incompatibilidade da biblioteca interna 'trim-canvas' com o Vite em produção.
+      const canvas = sigPad.current.getCanvas();
+      
+      if (!canvas) {
+        toast.error('Erro ao acessar o quadro de assinatura.');
+        setIsConcluding(false);
+        return;
+      }
       const dataUrl = canvas.toDataURL('image/png');
       const blob = await (await fetch(dataUrl)).blob();
 
