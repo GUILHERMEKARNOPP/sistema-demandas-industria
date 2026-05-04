@@ -53,6 +53,7 @@ export interface Demand {
   rating?: number; // 1 to 5
   ratingComment?: string;
   signatureUrl?: string; // Base64 or URL of the digital signature
+  evidenceUrls?: string[]; // Multiple Base64 images as evidence
   
   // Sistema de Aprovação (Alçadas)
   approvedByAdmin?: boolean;

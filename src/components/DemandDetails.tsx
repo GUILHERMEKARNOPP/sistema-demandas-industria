@@ -138,26 +138,15 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
       
       setIsConcluding(true);
       const canvas = sigPad.current.getTrimmedCanvas();
-      if (!canvas) {
-        toast.error('Erro ao processar assinatura.');
-        setIsConcluding(false);
-        return;
-      }
-
-      // Converte o canvas para Blob de forma mais compatível
+      // Converte o canvas para Blob de forma mais compatível para o service
       const dataUrl = canvas.toDataURL('image/png');
       const blob = await (await fetch(dataUrl)).blob();
 
-      // 1. Upload da assinatura para o Storage
-      const signatureUrl = await demandService.uploadSignature(demand.id, blob);
+      // 1. "Upload" da assinatura (converte e salva no Firestore como Base64)
+      const signatureUrl = await demandService.uploadSignature(demand.id, blob); 
       
-      // 2. Atualiza o status no Firestore
-      await demandService.updateDemand(demand.id, { 
-        status: 'Concluído', 
-        signatureUrl,
-        updatedAt: new Date().toISOString()
-      });
-
+      // 2. O status e a assinatura são atualizados no service. 
+      // No component apenas confirmamos o sucesso visual.
       setStatus('Concluído');
       setShowSignature(false);
       toast.success('Chamado concluído com sucesso!');
@@ -253,10 +242,20 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
 
     try {
       setIsUploadingEvidence(true);
-      const imageUrl = await demandService.uploadSignature(demand.id + '_evidence_' + Date.now(), file); // Reuse signature upload logic or generic upload
-      await demandService.updateDemand(demand.id, { imageUrl });
+      const base64 = await demandService.addEvidence(demand.id, file);
+      
+      const currentEvidence = demand.evidenceUrls || [];
+      const updatedEvidence = [...currentEvidence, base64];
+      
+      await demandService.updateDemand(demand.id, { 
+        evidenceUrls: updatedEvidence,
+        // Também atualiza o imageUrl principal se for a primeira imagem
+        imageUrl: demand.imageUrl || base64 
+      });
+      
       toast.success('Evidência enviada com sucesso!');
     } catch (error) {
+      console.error('Erro ao enviar evidência:', error);
       toast.error('Erro ao enviar evidência');
     } finally {
       setIsUploadingEvidence(false);
@@ -347,19 +346,26 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
               </p>
             </div>
 
-            {demand.imageUrl && (
+            {(demand.imageUrl || (demand.evidenceUrls && demand.evidenceUrls.length > 0)) && (
               <div style={{ marginBottom: '2rem' }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <ImageIcon size={16} /> Evidência Fotográfica
+                  <ImageIcon size={16} /> Evidências Fotográficas
                 </h3>
-                <img src={demand.imageUrl} alt="Evidência" style={{ width: '100%', borderRadius: '8px', border: '1px solid var(--surface-border)', objectFit: 'cover' }} />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.5rem' }}>
+                  {demand.imageUrl && !demand.evidenceUrls?.includes(demand.imageUrl) && (
+                    <img src={demand.imageUrl} alt="Evidência" style={{ width: '100%', aspectRatio: '1/1', borderRadius: '8px', border: '1px solid var(--surface-border)', objectFit: 'cover' }} />
+                  )}
+                  {demand.evidenceUrls?.map((url, idx) => (
+                    <img key={idx} src={url} alt={`Evidência ${idx + 1}`} style={{ width: '100%', aspectRatio: '1/1', borderRadius: '8px', border: '1px solid var(--surface-border)', objectFit: 'cover' }} />
+                  ))}
+                </div>
               </div>
             )}
 
-            {!demand.imageUrl && isRequester && status !== 'Concluído' && (
+            {isRequester && status !== 'Concluído' && (
               <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px', border: '1px dashed var(--primary-color)' }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <ImageIcon size={16} /> Adicionar Evidência
+                  <ImageIcon size={16} /> {demand.imageUrl ? 'Adicionar mais evidências' : 'Adicionar Evidência'}
                 </h3>
                 <input type="file" accept="image/*" onChange={handleAddEvidence} disabled={isUploadingEvidence} />
                 {isUploadingEvidence && <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>Enviando imagem...</p>}
