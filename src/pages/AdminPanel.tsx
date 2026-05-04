@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import type { Demand } from '../types';
 import { Navigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { subscribeToDemands, deleteDemand } from '../lib/demandService';
 import { Download, Trash2, ExternalLink, TrendingUp, DollarSign, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -80,18 +80,7 @@ export const AdminPanel: React.FC = () => {
     ? demands.reduce((acc, d) => acc + (d.totalCost || 0), 0) / demands.filter(d => d.totalCost).length
     : 0;
 
-  // Estatísticas de Status
-  const statusData = demands.reduce((acc, demand) => {
-    const existing = acc.find(item => item.name === demand.status);
-    if (existing) {
-      existing.value += 1;
-    } else {
-      acc.push({ name: demand.status, value: 1 });
-    }
-    return acc;
-  }, [] as { name: string; value: number }[]);
-
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+  // Custo Médio por Categoria
 
   return (
     <div className="admin-panel-container">
@@ -194,7 +183,7 @@ export const AdminPanel: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(128,128,128,0.1)" />
                     <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={12} />
                     <YAxis stroke="var(--text-secondary)" fontSize={12} />
-                    <Tooltip formatter={(value: number) => `R$ ${value}`} contentStyle={{ backgroundColor: 'var(--surface-color)', border: 'none', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                    <Tooltip formatter={(value: any) => `R$ ${Number(value).toFixed(2)}`} contentStyle={{ backgroundColor: 'var(--surface-color)', border: 'none', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
                     <Bar dataKey="avgCost" name="Custo Médio" fill="#10b981" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

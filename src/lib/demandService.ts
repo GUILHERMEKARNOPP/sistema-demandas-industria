@@ -1,6 +1,6 @@
 import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage, auth } from './firebase';
+import { db, storage } from './firebase';
 import type { Demand, Comment } from '../types';
 
 export const DEMANDS_COLLECTION = 'demands';
