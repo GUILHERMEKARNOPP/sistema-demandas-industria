@@ -91,11 +91,6 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
     // Se custo ultrapassar o limite, dispara aprovação obrigatória
     // Re-dispara aprovação se o custo subir acima do threshold mesmo se já tivesse sido aprovado anteriormente (segurança)
     if (totalCost >= APPROVAL_COST_THRESHOLD && (!demand.approvedByAdmin || totalCost > (demand.totalCost || 0))) {
-      const updates: Partial<Demand> = {
-        partsUsed: updatedParts,
-        totalCost,
-        status: 'Aguardando Aprovação',
-        approvalRequestedAt: new Date().toISOString(),
       const approvalUpdates: Partial<Demand> = {
         partsUsed: updatedParts,
         totalCost,

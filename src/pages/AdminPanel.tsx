@@ -76,9 +76,46 @@ export const AdminPanel: React.FC = () => {
     avgCost: Number((data.total / data.count).toFixed(2))
   }));
 
-  const totalAvgCost = demands.filter(d => d.totalCost).length > 0 
-    ? demands.reduce((acc, d) => acc + (d.totalCost || 0), 0) / demands.filter(d => d.totalCost).length
     : 0;
+    
+  // --- NOVOS KPIs INDUSTRIAIS (CUSTO ZERO) ---
+  
+  // 1. MTTR (Mean Time To Repair) - Tempo Médio de Reparo
+  const completedDemands = demands.filter(d => d.status === 'Concluído' && d.updatedAt);
+  const totalMttrMs = completedDemands.reduce((acc, d) => {
+    const start = new Date(d.createdAt).getTime();
+    const end = new Date(d.updatedAt!).getTime();
+    return acc + (end - start);
+  }, 0);
+  const mttrHours = completedDemands.length > 0 ? (totalMttrMs / completedDemands.length / (1000 * 60 * 60)).toFixed(1) : '0';
+
+  // 2. MTBF (Mean Time Between Failures) - Tempo Médio entre Falhas (por Máquina)
+  const machineFailures = demands.reduce((acc, d) => {
+    if (d.machineId) {
+      if (!acc[d.machineId]) acc[d.machineId] = [];
+      acc[d.machineId].push(new Date(d.createdAt).getTime());
+    }
+    return acc;
+  }, {} as Record<string, number[]>);
+
+  let totalIntervalsMs = 0;
+  let intervalCount = 0;
+  Object.values(machineFailures).forEach(times => {
+    times.sort((a, b) => a - b);
+    for (let i = 1; i < times.length; i++) {
+      totalIntervalsMs += (times[i] - times[i-1]);
+      intervalCount++;
+    }
+  });
+  const mtbfDays = intervalCount > 0 ? (totalIntervalsMs / intervalCount / (1000 * 60 * 60 * 24)).toFixed(1) : '0';
+
+  // 3. Custos por Departamento
+  const deptCosts = demands.reduce((acc, demand) => {
+    const dept = demand.department || 'Geral';
+    acc[dept] = (acc[dept] || 0) + (demand.totalCost || 0);
+    return acc;
+  }, {} as Record<string, number>);
+  const deptCostData = Object.entries(deptCosts).map(([name, value]) => ({ name, value }));
 
   // Custo Médio por Categoria
 
@@ -150,7 +187,37 @@ export const AdminPanel: React.FC = () => {
             </div>
             <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: '1rem', borderRadius: '12px' }}>
-                <AlertTriangle color="#f59e0b" />
+                <Clock color="#f59e0b" />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>MTTR (Média de Reparo)</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>{mttrHours} h</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3" style={{ gap: '1.5rem', marginBottom: '2rem' }}>
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', padding: '1rem', borderRadius: '12px' }}>
+                <TrendingUp color="#8b5cf6" />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>MTBF (Entre Falhas)</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>{mtbfDays} dias</div>
+              </div>
+            </div>
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '1rem', borderRadius: '12px' }}>
+                <DollarSign color="#10b981" />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Custo Médio</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>R$ {totalAvgCost.toFixed(2)}</div>
+              </div>
+            </div>
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '1rem', borderRadius: '12px' }}>
+                <AlertTriangle color="#ef4444" />
               </div>
               <div>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total de Chamados</div>
@@ -176,15 +243,15 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             <div className="glass-panel" style={{ padding: '2rem' }}>
-              <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Custo Médio por Categoria (R$)</h3>
+              <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Custo por Departamento (R$)</h3>
               <div style={{ width: '100%', height: 300 }}>
                 <ResponsiveContainer>
-                  <BarChart data={costData}>
+                  <BarChart data={deptCostData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(128,128,128,0.1)" />
                     <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={12} />
                     <YAxis stroke="var(--text-secondary)" fontSize={12} />
                     <Tooltip formatter={(value: any) => `R$ ${Number(value).toFixed(2)}`} contentStyle={{ backgroundColor: 'var(--surface-color)', border: 'none', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                    <Bar dataKey="avgCost" name="Custo Médio" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="value" name="Custo Total" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
