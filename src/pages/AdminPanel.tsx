@@ -4,8 +4,10 @@ import type { Demand } from '../types';
 import { Navigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { subscribeToDemands, deleteDemand } from '../lib/demandService';
-import { Download, Trash2, ExternalLink, TrendingUp, DollarSign, AlertTriangle, Clock, QrCode } from 'lucide-react';
+import { adminCreateUser, updateUserRole, deleteUser as deleteUserFirestore } from '../lib/userService';
+import { Download, Trash2, ExternalLink, TrendingUp, DollarSign, AlertTriangle, Clock, QrCode, UserPlus, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import type { UserRole } from '../types';
 
 export const AdminPanel: React.FC = () => {
   const { user, users, deleteUser } = useAuth();
@@ -13,6 +15,14 @@ export const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'metrics' | 'users' | 'demands' | 'powerbi' | 'qrcode'>('metrics');
   const [qrMachine, setQrMachine] = useState('');
   const [qrDept, setQrDept] = useState('');
+  
+  // New User Form State
+  const [isNewUserModalOpen, setIsNewUserModalOpen] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<UserRole>('SOLICITANTE');
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     const unsubscribe = subscribeToDemands((data) => {
@@ -23,8 +33,39 @@ export const AdminPanel: React.FC = () => {
 
   const handleDeleteUser = async (userId: string) => {
     if (window.confirm("Tem certeza que deseja remover este usuário? Esta ação não pode ser desfeita.")) {
-      await deleteUser(userId);
-      toast.success("Usuário removido com sucesso");
+      try {
+        await deleteUserFirestore(userId);
+        toast.success("Usuário removido com sucesso");
+      } catch (error) {
+        toast.error("Erro ao remover usuário");
+      }
+    }
+  };
+
+  const handleUpdateRole = async (userId: string, newRole: UserRole) => {
+    try {
+      await updateUserRole(userId, newRole);
+      toast.success("Perfil atualizado com sucesso");
+    } catch (error) {
+      toast.error("Erro ao atualizar perfil");
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsCreating(true);
+    try {
+      await adminCreateUser(newUserName, newUserEmail, newUserRole, newUserPassword);
+      toast.success("Usuário criado com sucesso!");
+      setIsNewUserModalOpen(false);
+      setNewUserName('');
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserRole('SOLICITANTE');
+    } catch (error: any) {
+      toast.error("Erro ao criar usuário: " + (error.message || "Erro desconhecido"));
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -283,42 +324,102 @@ export const AdminPanel: React.FC = () => {
       )}
 
       {activeTab === 'users' && (
-        <div className="glass-panel animate-fade-in" style={{ padding: '2rem' }}>
-          <h3 style={{ marginBottom: '1.5rem' }}>Usuários Cadastrados</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--surface-border)' }}>
-                <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Nome</th>
-                <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>E-mail</th>
-                <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Perfil</th>
-                <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(u => (
-                <tr key={u.id} style={{ borderBottom: '1px solid var(--surface-border)' }}>
-                  <td style={{ padding: '1rem' }}>{u.name}</td>
-                  <td style={{ padding: '1rem' }}>{u.email}</td>
-                  <td style={{ padding: '1rem' }}>
-                    <span className={`badge ${u.role === 'ADMIN' ? 'badge-priority-critica' : u.role === 'TECNICO' ? 'badge-status-em-andamento' : 'badge-status-concluido'}`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td style={{ padding: '1rem' }}>
-                    <button 
-                      onClick={() => handleDeleteUser(u.id)}
-                      className="btn btn-outline" 
-                      style={{ padding: '0.4rem', borderColor: 'var(--danger-color)', color: 'var(--danger-color)' }}
-                      title="Remover Usuário"
-                      disabled={u.id === user?.id}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
+        <div className="animate-fade-in glass-panel" style={{ padding: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h3 style={{ margin: 0 }}>Gerenciamento de Usuários</h3>
+            <button className="btn btn-primary" onClick={() => setIsNewUserModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <UserPlus size={18} /> Novo Usuário
+            </button>
+          </div>
+          
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--surface-border)' }}>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Nome</th>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>E-mail</th>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Perfil / Acesso</th>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id} style={{ borderBottom: '1px solid var(--surface-border)' }}>
+                    <td style={{ padding: '1rem' }}>{u.name}</td>
+                    <td style={{ padding: '1rem' }}>{u.email}</td>
+                    <td style={{ padding: '1rem' }}>
+                      <select 
+                        value={u.role} 
+                        onChange={(e) => handleUpdateRole(u.id, e.target.value as UserRole)}
+                        className="form-control"
+                        style={{ padding: '0.25rem 0.5rem', width: 'auto', fontSize: '0.85rem' }}
+                        disabled={u.id === user?.id}
+                      >
+                        <option value="SOLICITANTE">Solicitante</option>
+                        <option value="TECNICO">Técnico</option>
+                        <option value="ADMIN">Admin</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: '1rem' }}>
+                      <button 
+                        onClick={() => handleDeleteUser(u.id)}
+                        className="btn btn-outline" 
+                        style={{ padding: '0.4rem', borderColor: 'var(--danger-color)', color: 'var(--danger-color)' }}
+                        title="Remover Usuário"
+                        disabled={u.id === user?.id}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Novo Usuário */}
+      {isNewUserModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+          <div className="glass-panel animate-scale-in" style={{ maxWidth: '450px', width: '100%', padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0 }}>Adicionar Novo Usuário</h3>
+              <button onClick={() => setIsNewUserModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateUser}>
+              <div className="form-group">
+                <label className="form-label">Nome Completo</label>
+                <input type="text" required className="form-control" value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Ex: Técnico Silva" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">E-mail</label>
+                <input type="email" required className="form-control" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} placeholder="tecnico@empresa.com" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Senha Inicial</label>
+                <input type="password" required className="form-control" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} placeholder="Mínimo 6 caracteres" minLength={6} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Perfil de Acesso</label>
+                <select className="form-control" value={newUserRole} onChange={e => setNewUserRole(e.target.value as UserRole)}>
+                  <option value="SOLICITANTE">Solicitante</option>
+                  <option value="TECNICO">Técnico</option>
+                  <option value="ADMIN">Administrador</option>
+                </select>
+              </div>
+              
+              <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
+                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsNewUserModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={isCreating}>
+                  {isCreating ? "Criando..." : "Criar Usuário"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

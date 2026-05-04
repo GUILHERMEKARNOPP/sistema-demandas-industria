@@ -74,16 +74,10 @@ export const Register: React.FC = () => {
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Perfil de Acesso</label>
-            <select className="form-control" value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
-              <option value="SOLICITANTE">Colaborador / Solicitante</option>
-              <option value="TECNICO">Técnico de Manutenção</option>
-              <option value="ADMIN">Administrador</option>
-            </select>
-            <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.5rem' }}>
-              * Em ambiente de produção, perfis administrativos requerem aprovação prévia.
-            </small>
+          <div className="form-group" style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+              <strong>Nota:</strong> Novos cadastros são habilitados apenas como <strong>Solicitantes</strong>. Se você é um Técnico ou Administrador, solicite a alteração de perfil após o cadastro.
+            </p>
           </div>
 
           <div className="form-group" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', padding: '1rem', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: '8px' }}>
