@@ -6,6 +6,8 @@ import { subscribeToDemands, updateDemandStatus } from '../lib/demandService';
 import { Plus, Filter, Wrench, CheckCircle, AlertTriangle, Clock, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { requestNotificationPermission, sendPushNotification, playNotificationSound } from '../lib/notificationService';
+import { usePWAInstall } from '../hooks/usePWAInstall';
+import { Download } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -14,6 +16,7 @@ export const Dashboard: React.FC = () => {
   const [selectedDemand, setSelectedDemand] = useState<Demand | null>(null);
   const [filter, setFilter] = useState<Status | 'Todas'>('Todas');
   const prevDemandCountRef = useRef<number | null>(null);
+  const { isInstallable, installPWA } = usePWAInstall();
 
   useEffect(() => {
     // Solicita permissão de notificação push na primeira vez
@@ -89,12 +92,20 @@ export const Dashboard: React.FC = () => {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h2>Painel de Chamados</h2>
-        {user?.role === 'SOLICITANTE' && (
-          <button className="btn btn-primary" onClick={() => setIsFormOpen(true)}>
-            <Plus size={18} />
-            Nova Solicitação
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          {isInstallable && (
+            <button className="btn btn-outline" onClick={installPWA} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderColor: 'var(--primary-color)', color: 'var(--primary-color)' }}>
+              <Download size={18} />
+              Instalar Aplicativo
+            </button>
+          )}
+          {user?.role === 'SOLICITANTE' && (
+            <button className="btn btn-primary" onClick={() => setIsFormOpen(true)}>
+              <Plus size={18} />
+              Nova Solicitação
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-4" style={{ marginBottom: '2rem' }}>

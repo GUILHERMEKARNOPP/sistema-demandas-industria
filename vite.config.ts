@@ -7,21 +7,28 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
       manifest: {
         name: 'OptimaManutenção',
         short_name: 'Optima',
-        description: 'SaaS Enterprise de Gestão de Manutenção',
+        description: 'SaaS Enterprise de Gestão de Manutenção Industrial',
         theme_color: '#3b82f6',
+        background_color: '#0f172a',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/sistema-demandas-industria/',
         icons: [
           {
             src: 'https://cdn-icons-png.flaticon.com/512/10435/10435165.png',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           },
           {
             src: 'https://cdn-icons-png.flaticon.com/512/10435/10435165.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable'
           }
         ]
       }
