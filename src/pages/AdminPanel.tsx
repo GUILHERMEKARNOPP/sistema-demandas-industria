@@ -4,13 +4,15 @@ import type { Demand } from '../types';
 import { Navigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { subscribeToDemands, deleteDemand } from '../lib/demandService';
-import { Download, Trash2, ExternalLink, TrendingUp, DollarSign, AlertTriangle } from 'lucide-react';
+import { Download, Trash2, ExternalLink, TrendingUp, DollarSign, AlertTriangle, Clock, QrCode } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 export const AdminPanel: React.FC = () => {
   const { user, users, deleteUser } = useAuth();
   const [demands, setDemands] = useState<Demand[]>([]);
-  const [activeTab, setActiveTab] = useState<'metrics' | 'users' | 'demands' | 'powerbi'>('metrics');
+  const [activeTab, setActiveTab] = useState<'metrics' | 'users' | 'demands' | 'powerbi' | 'qrcode'>('metrics');
+  const [qrMachine, setQrMachine] = useState('');
+  const [qrDept, setQrDept] = useState('');
 
   useEffect(() => {
     const unsubscribe = subscribeToDemands((data) => {
@@ -52,7 +54,6 @@ export const AdminPanel: React.FC = () => {
     return <Navigate to="/" replace />;
   }
 
-  // Estatísticas de Categorias (Problema que mais acontece)
   const categoryCounts = demands.reduce((acc, demand) => {
     acc[demand.category] = (acc[demand.category] || 0) + 1;
     return acc;
@@ -61,26 +62,6 @@ export const AdminPanel: React.FC = () => {
   const categoryData = Object.entries(categoryCounts).map(([name, value]) => ({ name, value }));
   const mostFrequentProblem = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
 
-  // Custo Médio por Categoria
-  const categoryCosts = demands.reduce((acc, demand) => {
-    if (demand.totalCost) {
-      if (!acc[demand.category]) acc[demand.category] = { total: 0, count: 0 };
-      acc[demand.category].total += demand.totalCost;
-      acc[demand.category].count += 1;
-    }
-    return acc;
-  }, {} as Record<string, { total: number; count: number }>);
-
-  const costData = Object.entries(categoryCosts).map(([name, data]) => ({
-    name,
-    avgCost: Number((data.total / data.count).toFixed(2))
-  }));
-
-    : 0;
-    
-  // --- NOVOS KPIs INDUSTRIAIS (CUSTO ZERO) ---
-  
-  // 1. MTTR (Mean Time To Repair) - Tempo Médio de Reparo
   const completedDemands = demands.filter(d => d.status === 'Concluído' && d.updatedAt);
   const totalMttrMs = completedDemands.reduce((acc, d) => {
     const start = new Date(d.createdAt).getTime();
@@ -89,7 +70,6 @@ export const AdminPanel: React.FC = () => {
   }, 0);
   const mttrHours = completedDemands.length > 0 ? (totalMttrMs / completedDemands.length / (1000 * 60 * 60)).toFixed(1) : '0';
 
-  // 2. MTBF (Mean Time Between Failures) - Tempo Médio entre Falhas (por Máquina)
   const machineFailures = demands.reduce((acc, d) => {
     if (d.machineId) {
       if (!acc[d.machineId]) acc[d.machineId] = [];
@@ -109,15 +89,14 @@ export const AdminPanel: React.FC = () => {
   });
   const mtbfDays = intervalCount > 0 ? (totalIntervalsMs / intervalCount / (1000 * 60 * 60 * 24)).toFixed(1) : '0';
 
-  // 3. Custos por Departamento
   const deptCosts = demands.reduce((acc, demand) => {
     const dept = demand.department || 'Geral';
     acc[dept] = (acc[dept] || 0) + (demand.totalCost || 0);
     return acc;
   }, {} as Record<string, number>);
   const deptCostData = Object.entries(deptCosts).map(([name, value]) => ({ name, value }));
-
-  // Custo Médio por Categoria
+  
+  const totalAvgCost = demands.length > 0 ? demands.reduce((acc, d) => acc + (d.totalCost || 0), 0) / demands.length : 0;
 
   return (
     <div className="admin-panel-container">
@@ -131,7 +110,6 @@ export const AdminPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs Navigation */}
       <div className="tabs" style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid var(--surface-border)', paddingBottom: '0.5rem' }}>
         <button 
           className={`tab-item ${activeTab === 'metrics' ? 'active' : ''}`} 
@@ -161,11 +139,17 @@ export const AdminPanel: React.FC = () => {
         >
           PowerBI
         </button>
+        <button 
+          className={`tab-item ${activeTab === 'qrcode' ? 'active' : ''}`} 
+          onClick={() => setActiveTab('qrcode')}
+          style={{ padding: '0.5rem 1rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'qrcode' ? '2px solid var(--primary-color)' : 'none', color: activeTab === 'qrcode' ? 'var(--primary-color)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}
+        >
+          QR Codes
+        </button>
       </div>
 
       {activeTab === 'metrics' && (
         <div className="animate-fade-in">
-          {/* Key Metrics Cards */}
           <div className="grid grid-cols-3" style={{ gap: '1.5rem', marginBottom: '2rem' }}>
             <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <div style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '1rem', borderRadius: '12px' }}>
@@ -195,7 +179,6 @@ export const AdminPanel: React.FC = () => {
               </div>
             </div>
           </div>
-
           <div className="grid grid-cols-3" style={{ gap: '1.5rem', marginBottom: '2rem' }}>
             <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <div style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', padding: '1rem', borderRadius: '12px' }}>
@@ -225,7 +208,6 @@ export const AdminPanel: React.FC = () => {
               </div>
             </div>
           </div>
-
           <div className="grid grid-cols-2" style={{ marginBottom: '2rem', gap: '1.5rem' }}>
             <div className="glass-panel" style={{ padding: '2rem' }}>
               <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Chamados por Categoria</h3>
@@ -241,7 +223,6 @@ export const AdminPanel: React.FC = () => {
                 </ResponsiveContainer>
               </div>
             </div>
-
             <div className="glass-panel" style={{ padding: '2rem' }}>
               <h3 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Custo por Departamento (R$)</h3>
               <div style={{ width: '100%', height: 300 }}>
@@ -341,6 +322,78 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
+      {activeTab === 'qrcode' && (
+        <div className="animate-fade-in glass-panel" style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+              <QrCode /> Gerador de Etiquetas QR Code
+            </h2>
+            <p style={{ color: 'var(--text-secondary)' }}>Gere códigos para fixar nas máquinas e facilitar a abertura de chamados.</p>
+          </div>
+
+          <div className="grid grid-cols-2" style={{ gap: '2rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div className="form-group">
+                <label className="form-label">Identificação da Máquina (Machine ID)</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Ex: TORNO-01, CNC-05..." 
+                  value={qrMachine}
+                  onChange={(e) => setQrMachine(e.target.value)}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--surface-border)', backgroundColor: 'var(--surface-color)', color: 'var(--text-primary)' }}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Departamento</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Ex: Produção, Usinagem..." 
+                  value={qrDept}
+                  onChange={(e) => setQrDept(e.target.value)}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--surface-border)', backgroundColor: 'var(--surface-color)', color: 'var(--text-primary)' }}
+                />
+              </div>
+              
+              <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                <strong>Como funciona:</strong> Ao escanear este código, o formulário de solicitação abrirá com a máquina e o departamento já preenchidos automaticamente. Isso reduz erros de digitação e agiliza a abertura do chamado.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed rgba(128,128,128,0.2)', borderRadius: '12px', padding: '2rem' }}>
+              {qrMachine || qrDept ? (
+                <>
+                  <div id="printable-qr" style={{ padding: '1rem', backgroundColor: 'white', borderRadius: '8px', marginBottom: '1.5rem', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}${window.location.pathname}?machineId=${qrMachine}&department=${qrDept}`)}`} 
+                      alt="QR Code" 
+                      style={{ width: '200px', height: '200px', display: 'block' }}
+                    />
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '0.25rem' }}>{qrMachine || 'Máquina Geral'}</div>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>{qrDept || 'Todos os Deptos'}</div>
+                    <button 
+                      onClick={() => window.print()}
+                      className="btn btn-primary"
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 auto' }}
+                    >
+                      <Download size={18} /> Imprimir Etiqueta
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  <QrCode size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                  <p>Preencha os dados ao lado para gerar o QR Code</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'powerbi' && (
         <div className="glass-panel animate-fade-in" style={{ padding: '2rem', height: '70vh', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -355,10 +408,6 @@ export const AdminPanel: React.FC = () => {
             <p style={{ maxWidth: '400px', margin: '1rem auto', color: 'var(--text-secondary)' }}>
               Para exibir seus gráficos do PowerBI aqui, publique seu relatório na web e use o link de "Inserir em site ou portal".
             </p>
-            <div style={{ width: '100%', height: '100%', minHeight: '400px', display: 'none' }}>
-              {/* Exemplo de como seria o Iframe: */}
-              {/* <iframe title="Relatório de Manutenção" width="100%" height="100%" src="SUA_URL_DO_POWERBI_AQUI" frameBorder="0" allowFullScreen={true}></iframe> */}
-            </div>
             <button className="btn btn-primary" onClick={() => window.open('https://powerbi.microsoft.com/', '_blank')}>
               Acessar PowerBI
             </button>
