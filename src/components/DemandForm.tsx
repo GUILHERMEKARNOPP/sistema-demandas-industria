@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Category, Priority } from '../types';
-import { X, Shield } from 'lucide-react';
+import { X, Shield, Mic, MicOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 import { addDemand } from '../lib/demandService';
@@ -21,7 +21,32 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
   const [consent, setConsent] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState('');
+
+  const startVoiceCommand = () => {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Seu navegador não suporta comandos de voz.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setDescription(prev => prev + (prev ? ' ' : '') + transcript);
+    };
+
+    recognition.onerror = () => setIsListening(false);
+    recognition.start();
+  };
 
   useEffect(() => {
     // Auto-fill form from QR Code (URL Params)
@@ -134,7 +159,23 @@ export const DemandForm: React.FC<DemandFormProps> = ({ onSubmit, onCancel }) =>
           </div>
           
           <div className="form-group">
-            <label className="form-label">Descrição Detalhada</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label className="form-label" style={{ marginBottom: 0 }}>Descrição Detalhada</label>
+              <button 
+                type="button"
+                onClick={startVoiceCommand}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                  padding: '4px 12px', borderRadius: '20px', border: 'none',
+                  backgroundColor: isListening ? 'var(--danger-color)' : 'var(--primary-color)',
+                  color: 'white', fontSize: '0.75rem', cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+                {isListening ? 'Ouvindo...' : 'Falar Descrição'}
+              </button>
+            </div>
             <textarea required className="form-control" rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder="Descreva o problema com o máximo de detalhes possível..."></textarea>
           </div>
 
