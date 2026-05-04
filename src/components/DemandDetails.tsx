@@ -8,7 +8,8 @@ const ptBR = locales.ptBR;
 import { useAuth } from '../contexts/AuthContext';
 import * as demandService from '../lib/demandService';
 import { toast } from 'react-hot-toast';
-import SignatureCanvas from 'react-signature-canvas';
+import SignatureCanvasComponent from 'react-signature-canvas';
+const SignatureCanvas = (SignatureCanvasComponent as any).default || SignatureCanvasComponent;
 import { sendPushNotification, playNotificationSound } from '../lib/notificationService';
 
 interface DemandDetailsProps {
@@ -60,7 +61,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
   const handleAddPart = async () => {
     if (!partName.trim() || partQty <= 0) return;
     const newPart: DemandPart = {
-      partId: crypto.randomUUID(),
+      partId: Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
       name: partName,
       quantityUsed: partQty,
       totalCost: partQty * (partCost || 0)
@@ -209,7 +210,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
     if (!newCommentText.trim() || !user) return;
     
     const comment: Comment = {
-      id: crypto.randomUUID(),
+      id: Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
       text: newCommentText,
       authorId: user.id,
       authorName: user.name,

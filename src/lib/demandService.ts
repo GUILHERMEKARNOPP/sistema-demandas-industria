@@ -57,7 +57,7 @@ export const addDemand = async (demandData: Omit<Demand, 'id' | 'createdAt' | 'u
   };
 
   if (!isFirebaseConfigured) {
-    const newDemand = { id: crypto.randomUUID(), ...finalDemand } as Demand;
+    const newDemand = { id: Math.random().toString(36).substring(2, 9) + Date.now().toString(36), ...finalDemand } as Demand;
     const saved = localStorage.getItem('@grc:demands');
     const demands = saved ? JSON.parse(saved) : [];
     localStorage.setItem('@grc:demands', JSON.stringify([newDemand, ...demands]));
