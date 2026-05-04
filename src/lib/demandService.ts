@@ -150,14 +150,12 @@ export const uploadSignature = async (demandId: string, signatureBlob: Blob): Pr
 /**
  * Adds evidence image as compressed Base64 to the demand's evidenceUrls array.
  */
-export const addEvidence = async (demandId: string, imageFile: File): Promise<string> => {
+export const addEvidence = async (_demandId: string, imageFile: File): Promise<string> => {
   try {
     const base64 = await compressAndConvertToBase64(imageFile, 800, 0.6);
     
     if (isFirebaseConfigured) {
-      const demandRef = doc(db, DEMANDS_COLLECTION, demandId);
-      // We'll handle the array update in the component or fetch current state here.
-      // For simplicity in the service, we return the base64 and let component update.
+      // We return the base64 and let component update to handle array logic easily
       return base64;
     } else {
       return base64;

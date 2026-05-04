@@ -143,7 +143,7 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
       const blob = await (await fetch(dataUrl)).blob();
 
       // 1. "Upload" da assinatura (converte e salva no Firestore como Base64)
-      const signatureUrl = await demandService.uploadSignature(demand.id, blob); 
+      await demandService.uploadSignature(demand.id, blob); 
       
       // 2. O status e a assinatura são atualizados no service. 
       // No component apenas confirmamos o sucesso visual.
