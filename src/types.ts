@@ -54,6 +54,11 @@ export interface Demand {
   ratingComment?: string;
   signatureUrl?: string; // Base64 or URL of the digital signature
   evidenceUrls?: string[]; // Multiple Base64 images as evidence
+  safetyChecklist?: {
+    item: string;
+    completed: boolean;
+    mandatory: boolean;
+  }[];
   
   // Sistema de Aprovação (Alçadas)
   approvedByAdmin?: boolean;

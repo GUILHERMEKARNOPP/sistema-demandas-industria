@@ -38,11 +38,27 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
   const [showSignature, setShowSignature] = useState(false);
   const [isConcluding, setIsConcluding] = useState(false);
   
+  // Default Safety Checklist items
+  const defaultChecklist = [
+    { item: 'Uso de EPIs Obrigatórios', completed: false, mandatory: true },
+    { item: 'Bloqueio de Energia / LOTO', completed: false, mandatory: true },
+    { item: 'Área de Trabalho Isolada/Sinalizada', completed: false, mandatory: false },
+    { item: 'Verificação de Ferramentas e Cabos', completed: false, mandatory: true },
+  ];
+
+  const [checklist, setChecklist] = useState(demand.safetyChecklist || defaultChecklist);
+  
   const { user } = useAuth();
 
   const handleStatusChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value as Status;
     if (newStatus === 'Concluído' && user?.role === 'TECNICO') {
+      // Validar Checklist de Segurança antes de prosseguir
+      const incompleteMandatory = checklist.filter(c => c.mandatory && !c.completed);
+      if (incompleteMandatory.length > 0) {
+        toast.error(`Checklist de Segurança incompleto: ${incompleteMandatory[0].item}`);
+        return;
+      }
       setShowSignature(true);
       return;
     }
@@ -80,15 +96,6 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
         totalCost,
         status: 'Aguardando Aprovação',
         approvalRequestedAt: new Date().toISOString(),
-      };
-      
-      // Se já estava aprovado mas o custo subiu, reseta a aprovação
-      if (demand.approvedByAdmin) {
-        updates.approvedByAdmin = false;
-        updates.approvedAt = undefined;
-        updates.approvedByName = undefined;
-      }
-
       const approvalUpdates: Partial<Demand> = {
         partsUsed: updatedParts,
         totalCost,
@@ -153,6 +160,9 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
       // 1. "Upload" da assinatura (converte e salva no Firestore como Base64)
       await demandService.uploadSignature(demand.id, blob); 
       
+      // Salva o checklist de segurança obrigatório
+      await demandService.updateDemand(demand.id, { safetyChecklist: checklist });
+
       // 2. O status e a assinatura são atualizados no service. 
       // No component apenas confirmamos o sucesso visual.
       setStatus('Concluído');
@@ -370,6 +380,36 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
               </div>
             )}
 
+            {/* Checklist de Segurança (Novo Gatilho de Segurança) */}
+            {(canEditStatus || (demand.safetyChecklist && demand.safetyChecklist.length > 0)) && (
+              <div style={{ marginBottom: '2rem', padding: '1.25rem', backgroundColor: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px' }}>
+                <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--danger-color)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <ShieldAlert size={18} /> Checklist de Segurança Obrigatório
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {checklist.map((item, idx) => (
+                    <label key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: canEditStatus && status !== 'Concluído' ? 'pointer' : 'default' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={item.completed} 
+                        onChange={(e) => {
+                          if (!canEditStatus || status === 'Concluído') return;
+                          const newChecklist = [...checklist];
+                          newChecklist[idx].completed = e.target.checked;
+                          setChecklist(newChecklist);
+                        }}
+                        disabled={!canEditStatus || status === 'Concluído'}
+                        style={{ width: '18px', height: '18px', accentColor: 'var(--danger-color)' }}
+                      />
+                      <span style={{ fontSize: '0.9rem', color: item.mandatory && !item.completed ? 'var(--danger-color)' : 'inherit', fontWeight: item.mandatory ? '600' : 'normal' }}>
+                        {item.item} {item.mandatory && <span style={{ color: 'var(--danger-color)', fontSize: '0.7rem' }}>(Obrigatório)</span>}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             {isRequester && status !== 'Concluído' && (
               <div style={{ marginBottom: '2rem', padding: '1rem', backgroundColor: 'rgba(59, 130, 246, 0.05)', borderRadius: '8px', border: '1px dashed var(--primary-color)' }}>
                 <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
