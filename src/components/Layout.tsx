@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 export const Layout: React.FC = () => {
   const { user, logout, users } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const pendingCount = users.filter(u => u.status === 'PENDENTE').length;
+  const pendingCount = users.filter(u => (u.status || 'PENDENTE') === 'PENDENTE').length;
 
   if (!user) {
     return <Navigate to="/login" replace />;

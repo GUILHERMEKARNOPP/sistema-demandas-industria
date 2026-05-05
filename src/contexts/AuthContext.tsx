@@ -36,24 +36,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if ((window as any)._unsubscribeUsers) {
+        (window as any)._unsubscribeUsers();
+        (window as any)._unsubscribeUsers = null;
+      }
+
       try {
         if (firebaseUser) {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          
           if (userDoc.exists()) {
-            const userData = userDoc.data() as User;
+            let userData = userDoc.data() as User;
             
-            // Tratamento para usuários antigos ou sem status definido
-            // Se for ADMIN, assume APROVADO para evitar lockout
+            // Bootstrap logic: if this is the only user, make them ADMIN/APROVADO
+            const usersSnapshot = await getDocs(query(collection(db, 'users'), limit(2)));
+            if (usersSnapshot.size === 1) {
+              const updatedUser = { ...userData, role: 'ADMIN' as UserRole, status: 'APROVADO' as const };
+              await setDoc(userDocRef, updatedUser);
+              userData = updatedUser;
+            }
+
             const userStatus = userData.status || (userData.role === 'ADMIN' ? 'APROVADO' : 'PENDENTE');
 
-            // Se o usuário não estiver aprovado, desloga e avisa
             if (userStatus !== 'APROVADO') {
               await signOut(auth);
               setUser(null);
+              // Dispara um evento para o componente Login saber que não está aprovado
+              window.dispatchEvent(new CustomEvent('auth-not-approved'));
               return;
             }
             
             setUser({ id: firebaseUser.uid, ...userData, status: userStatus });
+
+            if (userData.role === 'ADMIN') {
+              const unsub = onSnapshot(collection(db, 'users'), (snapshot) => {
+                const usersData: User[] = [];
+                snapshot.forEach(doc => {
+                  usersData.push({ id: doc.id, ...doc.data() } as User);
+                });
+                setUsers(usersData);
+              });
+              (window as any)._unsubscribeUsers = unsub;
+            }
           } else {
             setUser(null);
           }
@@ -62,28 +87,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUsers([]);
         }
       } catch (error) {
-        console.error("Auth status check error:", error);
+        console.error("Auth error:", error);
         setUser(null);
       } finally {
         setLoading(false);
       }
     });
 
-    // Subscrição de usuários - Movida para fora do listener de auth mas com tratamento de erro
-    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const usersData: User[] = [];
-      snapshot.forEach(doc => {
-        usersData.push({ id: doc.id, ...doc.data() } as User);
-      });
-      setUsers(usersData);
-    }, (error) => {
-      // Se falhar (ex: sem permissão), apenas loga e mantém a lista vazia
-      console.warn("Users subscription restricted:", error.message);
-    });
-
     return () => {
       unsubscribeAuth();
-      unsubscribeUsers();
+      if ((window as any)._unsubscribeUsers) {
+        (window as any)._unsubscribeUsers();
+      }
     };
   }, [isFirebaseConfigured]);
 
@@ -93,28 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     if (!password) throw new Error("Senha obrigatória para Firebase");
-    
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const userDocRef = doc(db, 'users', userCredential.user.uid);
-    const userDoc = await getDoc(userDocRef);
-    
-    if (userDoc.exists()) {
-      let userData = userDoc.data() as User;
-      
-      // Se não tiver status ou não estiver aprovado, verifica se é o único usuário (Bootstrap)
-      if (!userData.status || userData.status !== 'APROVADO') {
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        if (usersSnapshot.size === 1) {
-          // É o único usuário, promove a admin automaticamente
-          const updatedUser = { ...userData, role: 'ADMIN' as UserRole, status: 'APROVADO' as const };
-          await setDoc(userDocRef, updatedUser);
-          userData = updatedUser;
-        } else if (userData.status !== 'APROVADO') {
-          await signOut(auth);
-          throw new Error('Sua conta ainda não foi aprovada pelo administrador.');
-        }
-      }
-    }
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const register = async (name: string, email: string, role: UserRole, password?: string) => {
@@ -124,27 +118,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     if (!password) throw new Error("Senha obrigatória para Firebase");
     
-    // Verifica se este é o primeiro usuário do sistema
-    const usersSnapshot = await getDocs(query(collection(db, 'users'), limit(1)));
-    const isFirstUser = usersSnapshot.empty;
-
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     
     const newUser: User = { 
       id: userCredential.user.uid,
       name, 
       email, 
-      role: isFirstUser ? 'ADMIN' : role, 
-      status: isFirstUser ? 'APROVADO' : 'PENDENTE',
+      role: role, // Será promovido no onAuthStateChanged se for o primeiro
+      status: 'PENDENTE', // Será promovido no onAuthStateChanged se for o primeiro
       createdAt: new Date().toISOString()
     };
     
     await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-    
-    // Se não for o primeiro usuário, desloga para aguardar aprovação
-    if (!isFirstUser) {
-      await signOut(auth);
-    }
   };
 
   const logout = async () => {

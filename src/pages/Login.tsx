@@ -10,6 +10,14 @@ export const Login: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    const handleNotApproved = () => {
+      setError("Sua conta ainda não foi aprovada pelo administrador. Por favor, aguarde a liberação.");
+    };
+    window.addEventListener('auth-not-approved', handleNotApproved);
+    return () => window.removeEventListener('auth-not-approved', handleNotApproved);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {

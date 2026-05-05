@@ -232,7 +232,7 @@ export const AdminPanel: React.FC = () => {
           onClick={() => setActiveTab('approval')}
           style={{ padding: '0.5rem 1rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'approval' ? '2px solid var(--primary-color)' : 'none', color: activeTab === 'approval' ? 'var(--primary-color)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
         >
-          Aprovações {users.filter(u => u.status === 'PENDENTE').length > 0 && <span style={{ backgroundColor: 'var(--danger-color)', color: 'white', borderRadius: '50%', width: '18px', height: '18px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{users.filter(u => u.status === 'PENDENTE').length}</span>}
+          Aprovações {users.filter(u => (u.status || 'PENDENTE') === 'PENDENTE').length > 0 && <span style={{ backgroundColor: 'var(--danger-color)', color: 'white', borderRadius: '50%', width: '18px', height: '18px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{users.filter(u => (u.status || 'PENDENTE') === 'PENDENTE').length}</span>}
         </button>
         <button 
           className={`tab-item ${activeTab === 'users' ? 'active' : ''}`} 
@@ -405,12 +405,12 @@ export const AdminPanel: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {users.filter(u => u.status === 'PENDENTE').length === 0 ? (
+                {users.filter(u => (u.status || 'PENDENTE') === 'PENDENTE').length === 0 ? (
                   <tr>
                     <td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Nenhum usuário pendente de aprovação.</td>
                   </tr>
                 ) : (
-                  users.filter(u => u.status === 'PENDENTE').map(u => (
+                  users.filter(u => (u.status || 'PENDENTE') === 'PENDENTE').map(u => (
                     <tr key={u.id} style={{ borderBottom: '1px solid var(--surface-border)' }}>
                       <td style={{ padding: '1rem' }}>{u.name}</td>
                       <td style={{ padding: '1rem' }}>{u.email}</td>
