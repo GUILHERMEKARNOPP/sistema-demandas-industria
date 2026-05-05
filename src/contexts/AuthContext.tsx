@@ -7,7 +7,7 @@ import {
   signOut, 
   onAuthStateChanged 
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, getDocs, query, limit } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -42,17 +42,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userDoc.exists()) {
             const userData = userDoc.data() as User;
             
+            // Tratamento para usuários antigos ou sem status definido
+            // Se for ADMIN, assume APROVADO para evitar lockout
+            const userStatus = userData.status || (userData.role === 'ADMIN' ? 'APROVADO' : 'PENDENTE');
+
             // Se o usuário não estiver aprovado, desloga e avisa
-            if (userData.status !== 'APROVADO') {
+            if (userStatus !== 'APROVADO') {
               await signOut(auth);
               setUser(null);
-              // Armazena erro temporário se necessário ou apenas deixa nulo
               return;
             }
             
-            setUser({ id: firebaseUser.uid, ...userData });
+            setUser({ id: firebaseUser.uid, ...userData, status: userStatus });
           } else {
-            // Se o documento não existe ainda (ex: delay no registro)
             setUser(null);
           }
         } else {
@@ -66,6 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
+    // Subscrição de usuários (apenas para Admin ou se necessário para o bootstrap)
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const usersData: User[] = [];
       snapshot.forEach(doc => {
@@ -90,13 +93,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!password) throw new Error("Senha obrigatória para Firebase");
     
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+    const userDocRef = doc(db, 'users', userCredential.user.uid);
+    const userDoc = await getDoc(userDocRef);
     
     if (userDoc.exists()) {
-      const userData = userDoc.data() as User;
-      if (userData.status !== 'APROVADO') {
-        await signOut(auth);
-        throw new Error('Sua conta ainda não foi aprovada pelo administrador.');
+      let userData = userDoc.data() as User;
+      
+      // Se não tiver status ou não estiver aprovado, verifica se é o único usuário (Bootstrap)
+      if (!userData.status || userData.status !== 'APROVADO') {
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        if (usersSnapshot.size === 1) {
+          // É o único usuário, promove a admin automaticamente
+          const updatedUser = { ...userData, role: 'ADMIN' as UserRole, status: 'APROVADO' as const };
+          await setDoc(userDocRef, updatedUser);
+          userData = updatedUser;
+        } else if (userData.status !== 'APROVADO') {
+          await signOut(auth);
+          throw new Error('Sua conta ainda não foi aprovada pelo administrador.');
+        }
       }
     }
   };
@@ -108,19 +122,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     if (!password) throw new Error("Senha obrigatória para Firebase");
     
+    // Verifica se este é o primeiro usuário do sistema
+    const usersSnapshot = await getDocs(query(collection(db, 'users'), limit(1)));
+    const isFirstUser = usersSnapshot.empty;
+
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    
     const newUser: User = { 
       id: userCredential.user.uid,
       name, 
       email, 
-      role, 
-      status: 'PENDENTE',
+      role: isFirstUser ? 'ADMIN' : role, 
+      status: isFirstUser ? 'APROVADO' : 'PENDENTE',
       createdAt: new Date().toISOString()
     };
     
     await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-    // Desloga imediatamente após o registro para aguardar aprovação
-    await signOut(auth);
+    
+    // Se não for o primeiro usuário, desloga para aguardar aprovação
+    if (!isFirstUser) {
+      await signOut(auth);
+    }
   };
 
   const logout = async () => {

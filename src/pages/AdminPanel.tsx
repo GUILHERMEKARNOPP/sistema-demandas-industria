@@ -15,6 +15,13 @@ export const AdminPanel: React.FC = () => {
   const [demands, setDemands] = useState<Demand[]>([]);
   const [preventives, setPreventives] = useState<PreventiveMaintenance[]>([]);
   const [activeTab, setActiveTab] = useState<'metrics' | 'users' | 'demands' | 'approval' | 'preventive' | 'qrcode'>('metrics');
+
+  useEffect(() => {
+    // Se houver usuários pendentes, muda para a aba de aprovação automaticamente
+    if (users.filter(u => u.status === 'PENDENTE').length > 0) {
+      setActiveTab('approval');
+    }
+  }, [users.length]);
   const [qrMachine, setQrMachine] = useState('');
   const [qrDept, setQrDept] = useState('');
   
