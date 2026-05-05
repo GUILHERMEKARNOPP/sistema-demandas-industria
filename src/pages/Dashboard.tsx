@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import type { Demand, Status } from '../types';
 import { DemandForm } from '../components/DemandForm';
 import { DemandDetails } from '../components/DemandDetails';
 import { subscribeToDemands, updateDemandStatus, createDemandFromPreventive } from '../lib/demandService';
 import { checkPreventiveSchedules, updatePreventive } from '../lib/preventiveService';
-import { Plus, Filter, Wrench, CheckCircle, AlertTriangle, Clock, ShieldAlert, Shield, Calendar } from 'lucide-react';
+import { Plus, Filter, Wrench, CheckCircle, AlertTriangle, Clock, ShieldAlert, Shield, Calendar, Download } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { requestNotificationPermission, sendPushNotification, playNotificationSound } from '../lib/notificationService';
 import { usePWAInstall } from '../hooks/usePWAInstall';
-import { Download } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, users } = useAuth();
   const [demands, setDemands] = useState<Demand[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedDemand, setSelectedDemand] = useState<Demand | null>(null);
@@ -187,16 +187,25 @@ export const Dashboard: React.FC = () => {
           </div>
           <span style={{ fontSize: '2rem', fontWeight: 700 }}>{completedDemands}</span>
         </div>
-        {(user?.role === 'ADMIN' || user?.role === 'TECNICO') && awaitingApproval > 0 && (
-          <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', border: '1px solid #f59e0b' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ color: '#f59e0b' }}>Aguardando Aprovação</span>
-              <ShieldAlert size={20} color="#f59e0b" />
-            </div>
-            <span style={{ fontSize: '2rem', fontWeight: 700, color: '#f59e0b' }}>{awaitingApproval}</span>
-          </div>
         )}
       </div>
+
+      {user?.role === 'ADMIN' && users.filter(u => u.status === 'PENDENTE').length > 0 && (
+        <div className="glass-panel animate-fade-in" style={{ padding: '1.5rem', marginBottom: '2rem', borderLeft: '4px solid var(--danger-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <ShieldAlert size={24} color="var(--danger-color)" />
+            <div>
+              <h4 style={{ margin: 0, color: 'var(--danger-color)' }}>Usuários Pendentes de Aprovação</h4>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Existem <strong>{users.filter(u => u.status === 'PENDENTE').length}</strong> novos usuários aguardando sua aprovação para acessar o sistema.
+              </p>
+            </div>
+          </div>
+          <Link to="/admin" className="btn btn-primary" style={{ fontSize: '0.8rem' }}>
+            Ir para Aprovações
+          </Link>
+        </div>
+      )}
 
       <div className="glass-panel" style={{ padding: '2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>

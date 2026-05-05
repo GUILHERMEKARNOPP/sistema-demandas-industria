@@ -36,22 +36,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (userDoc.exists()) {
-        const userData = userDoc.data() as User;
-        
-        // Verifica se o usuário está aprovado
-        if (userData.status !== 'APROVADO') {
-          throw new Error('Sua conta está aguardando aprovação administrativa.');
+      try {
+        if (firebaseUser) {
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data() as User;
+            
+            // Se o usuário não estiver aprovado, desloga e avisa
+            if (userData.status !== 'APROVADO') {
+              await signOut(auth);
+              setUser(null);
+              // Armazena erro temporário se necessário ou apenas deixa nulo
+              return;
+            }
+            
+            setUser({ id: firebaseUser.uid, ...userData });
+          } else {
+            // Se o documento não existe ainda (ex: delay no registro)
+            setUser(null);
+          }
+        } else {
+          setUser(null);
         }
-        
-        setUser({ id: firebaseUser.uid, ...userData });
-      }
-      } else {
+      } catch (error) {
+        console.error("Auth status check error:", error);
         setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -60,6 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         usersData.push({ id: doc.id, ...doc.data() } as User);
       });
       setUsers(usersData);
+    }, (error) => {
+      console.error("Users subscription error:", error);
     });
 
     return () => {
@@ -74,7 +88,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     if (!password) throw new Error("Senha obrigatória para Firebase");
-    await signInWithEmailAndPassword(auth, email, password);
+    
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+    
+    if (userDoc.exists()) {
+      const userData = userDoc.data() as User;
+      if (userData.status !== 'APROVADO') {
+        await signOut(auth);
+        throw new Error('Sua conta ainda não foi aprovada pelo administrador.');
+      }
+    }
   };
 
   const register = async (name: string, email: string, role: UserRole, password?: string) => {
@@ -95,9 +119,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     
     await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-    // Não definimos o usuário no estado aqui para forçar o login ou mostrar mensagem de espera
-    // No entanto, para não quebrar o fluxo do Firebase, o AuthStateListener vai disparar
-    // e o useEffect vai tratar se o usuário não estiver aprovado.
+    // Desloga imediatamente após o registro para aguardar aprovação
+    await signOut(auth);
   };
 
   const logout = async () => {
