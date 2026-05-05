@@ -2,6 +2,7 @@ export type Priority = 'Baixa' | 'Média' | 'Alta' | 'Crítica';
 export type Status = 'Pendente' | 'Em andamento' | 'Aguardando Aprovação' | 'Reprovado' | 'Concluído';
 export type Category = 'Estruturas' | 'Mobiliário' | 'Equipamentos' | 'Infraestrutura Administrativa';
 export type UserRole = 'SOLICITANTE' | 'TECNICO' | 'ADMIN';
+export type UserStatus = 'PENDENTE' | 'APROVADO' | 'REPROVADO';
 
 // Limite de custo que dispara aprovação obrigatória do Admin (em R$)
 export const APPROVAL_COST_THRESHOLD = 500;
@@ -11,8 +12,10 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  status: UserStatus;
   phone?: string; 
   password?: string;
+  createdAt: string;
 }
 
 export interface Part {
@@ -68,6 +71,7 @@ export interface Demand {
   rejectionReason?: string;     // Motivo da reprovação
   
   preventive?: boolean; // Is it a preventive maintenance?
+  preventiveId?: string; // Link to the preventive maintenance schedule
 }
 
 export interface Comment {
@@ -86,6 +90,7 @@ export interface PreventiveMaintenance {
   department: string;
   machineId?: string;
   intervalDays: number;
-  lastPerformed: string;
+  lastPerformed?: string;
   nextDueDate: string;
+  isActive: boolean;
 }

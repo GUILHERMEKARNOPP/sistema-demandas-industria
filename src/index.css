@@ -248,3 +248,17 @@ select.form-control option {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+.badge-status-aprovado { background-color: rgba(16, 185, 129, 0.2); color: var(--success-color); }
+.badge-status-rejeitado { background-color: rgba(239, 68, 68, 0.2); color: var(--danger-color); }
+.badge-status-pendente-aprovacao { background-color: rgba(245, 158, 11, 0.2); color: var(--warning-color); }

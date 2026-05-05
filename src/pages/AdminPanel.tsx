@@ -4,17 +4,28 @@ import type { Demand } from '../types';
 import { Navigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { subscribeToDemands, deleteDemand } from '../lib/demandService';
-import { adminCreateUser, updateUserRole, deleteUser as deleteUserFirestore } from '../lib/userService';
-import { Download, Trash2, ExternalLink, TrendingUp, DollarSign, AlertTriangle, Clock, QrCode, UserPlus, X } from 'lucide-react';
+import { adminCreateUser, updateUserRole, deleteUser as deleteUserFirestore, approveUser } from '../lib/userService';
+import { subscribeToPreventive, createPreventive, deletePreventive, updatePreventive } from '../lib/preventiveService';
+import { Download, Trash2, ExternalLink, TrendingUp, DollarSign, AlertTriangle, Clock, QrCode, UserPlus, X, Check, UserCheck, Calendar, Plus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import type { UserRole } from '../types';
+import type { UserRole, PreventiveMaintenance, Category } from '../types';
 
 export const AdminPanel: React.FC = () => {
-  const { user, users, deleteUser } = useAuth();
+  const { user, users } = useAuth();
   const [demands, setDemands] = useState<Demand[]>([]);
-  const [activeTab, setActiveTab] = useState<'metrics' | 'users' | 'demands' | 'powerbi' | 'qrcode'>('metrics');
+  const [preventives, setPreventives] = useState<PreventiveMaintenance[]>([]);
+  const [activeTab, setActiveTab] = useState<'metrics' | 'users' | 'demands' | 'approval' | 'preventive' | 'qrcode'>('metrics');
   const [qrMachine, setQrMachine] = useState('');
   const [qrDept, setQrDept] = useState('');
+  
+  // Preventive Form State
+  const [isPreventiveModalOpen, setIsPreventiveModalOpen] = useState(false);
+  const [prevTitle, setPrevTitle] = useState('');
+  const [prevDesc, setPrevDesc] = useState('');
+  const [prevInterval, setPrevInterval] = useState(30);
+  const [prevMachine, setPrevMachine] = useState('');
+  const [prevDept, setPrevDept] = useState('');
+  const [prevCategory, setPrevCategory] = useState<Category>('Equipamentos');
   
   // New User Form State
   const [isNewUserModalOpen, setIsNewUserModalOpen] = useState(false);
@@ -25,10 +36,18 @@ export const AdminPanel: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = subscribeToDemands((data) => {
+    const unsubscribeDemands = subscribeToDemands((data) => {
       setDemands(data);
     });
-    return () => unsubscribe();
+    
+    const unsubscribePreventive = subscribeToPreventive((data) => {
+      setPreventives(data);
+    });
+
+    return () => {
+      unsubscribeDemands();
+      unsubscribePreventive();
+    };
   }, []);
 
   const handleDeleteUser = async (userId: string) => {
@@ -66,6 +85,41 @@ export const AdminPanel: React.FC = () => {
       toast.error("Erro ao criar usuário: " + (error.message || "Erro desconhecido"));
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleApproveUser = async (userId: string, approve: boolean) => {
+    try {
+      await approveUser(userId, approve ? 'APROVADO' : 'REPROVADO');
+      toast.success(approve ? "Usuário aprovado!" : "Usuário reprovado");
+    } catch (error) {
+      toast.error("Erro ao processar aprovação");
+    }
+  };
+
+  const handleCreatePreventive = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const nextDate = new Date();
+      nextDate.setDate(nextDate.getDate() + prevInterval);
+      
+      await createPreventive({
+        title: prevTitle,
+        description: prevDesc,
+        category: prevCategory,
+        department: prevDept,
+        machineId: prevMachine,
+        intervalDays: prevInterval,
+        nextDueDate: nextDate.toISOString(),
+        isActive: true
+      });
+      
+      toast.success("Plano preventivo criado!");
+      setIsPreventiveModalOpen(false);
+      setPrevTitle('');
+      setPrevDesc('');
+    } catch (error) {
+      toast.error("Erro ao criar plano preventivo");
     }
   };
 
@@ -164,7 +218,14 @@ export const AdminPanel: React.FC = () => {
           onClick={() => setActiveTab('demands')}
           style={{ padding: '0.5rem 1rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'demands' ? '2px solid var(--primary-color)' : 'none', color: activeTab === 'demands' ? 'var(--primary-color)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}
         >
-          Gerenciar Chamados
+          Chamados
+        </button>
+        <button 
+          className={`tab-item ${activeTab === 'approval' ? 'active' : ''}`} 
+          onClick={() => setActiveTab('approval')}
+          style={{ padding: '0.5rem 1rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'approval' ? '2px solid var(--primary-color)' : 'none', color: activeTab === 'approval' ? 'var(--primary-color)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          Aprovações {users.filter(u => u.status === 'PENDENTE').length > 0 && <span style={{ backgroundColor: 'var(--danger-color)', color: 'white', borderRadius: '50%', width: '18px', height: '18px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{users.filter(u => u.status === 'PENDENTE').length}</span>}
         </button>
         <button 
           className={`tab-item ${activeTab === 'users' ? 'active' : ''}`} 
@@ -174,11 +235,11 @@ export const AdminPanel: React.FC = () => {
           Usuários
         </button>
         <button 
-          className={`tab-item ${activeTab === 'powerbi' ? 'active' : ''}`} 
-          onClick={() => setActiveTab('powerbi')}
-          style={{ padding: '0.5rem 1rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'powerbi' ? '2px solid var(--primary-color)' : 'none', color: activeTab === 'powerbi' ? 'var(--primary-color)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}
+          className={`tab-item ${activeTab === 'preventive' ? 'active' : ''}`} 
+          onClick={() => setActiveTab('preventive')}
+          style={{ padding: '0.5rem 1rem', background: 'transparent', border: 'none', borderBottom: activeTab === 'preventive' ? '2px solid var(--primary-color)' : 'none', color: activeTab === 'preventive' ? 'var(--primary-color)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600 }}
         >
-          PowerBI
+          Preventivas
         </button>
         <button 
           className={`tab-item ${activeTab === 'qrcode' ? 'active' : ''}`} 
@@ -323,12 +384,61 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'users' && (
+      {activeTab === 'approval' && (
+        <div className="animate-fade-in glass-panel" style={{ padding: '2rem' }}>
+          <h3 style={{ marginBottom: '1.5rem' }}>Novos Usuários Aguardando Aprovação</h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--surface-border)' }}>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Nome</th>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>E-mail</th>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Data Cadastro</th>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.filter(u => u.status === 'PENDENTE').length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Nenhum usuário pendente de aprovação.</td>
+                  </tr>
+                ) : (
+                  users.filter(u => u.status === 'PENDENTE').map(u => (
+                    <tr key={u.id} style={{ borderBottom: '1px solid var(--surface-border)' }}>
+                      <td style={{ padding: '1rem' }}>{u.name}</td>
+                      <td style={{ padding: '1rem' }}>{u.email}</td>
+                      <td style={{ padding: '1rem' }}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}</td>
+                      <td style={{ padding: '1rem', display: 'flex', gap: '0.5rem' }}>
+                        <button 
+                          onClick={() => handleApproveUser(u.id, true)}
+                          className="btn btn-primary" 
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                        >
+                          <Check size={14} /> Aprovar
+                        </button>
+                        <button 
+                          onClick={() => handleApproveUser(u.id, false)}
+                          className="btn btn-outline" 
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', borderColor: 'var(--danger-color)', color: 'var(--danger-color)' }}
+                        >
+                          Recusar
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'preventive' && (
         <div className="animate-fade-in glass-panel" style={{ padding: '2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h3 style={{ margin: 0 }}>Gerenciamento de Usuários</h3>
-            <button className="btn btn-primary" onClick={() => setIsNewUserModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <UserPlus size={18} /> Novo Usuário
+            <h3 style={{ margin: 0 }}>Planos de Manutenção Preventiva</h3>
+            <button className="btn btn-primary" onClick={() => setIsPreventiveModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Plus size={18} /> Novo Plano
             </button>
           </div>
           
@@ -336,43 +446,44 @@ export const AdminPanel: React.FC = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--surface-border)' }}>
-                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Nome</th>
-                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>E-mail</th>
-                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Perfil / Acesso</th>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Plano</th>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Máquina</th>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Frequência</th>
+                  <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Próxima Data</th>
                   <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map(u => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid var(--surface-border)' }}>
-                    <td style={{ padding: '1rem' }}>{u.name}</td>
-                    <td style={{ padding: '1rem' }}>{u.email}</td>
-                    <td style={{ padding: '1rem' }}>
-                      <select 
-                        value={u.role} 
-                        onChange={(e) => handleUpdateRole(u.id, e.target.value as UserRole)}
-                        className="form-control"
-                        style={{ padding: '0.25rem 0.5rem', width: 'auto', fontSize: '0.85rem' }}
-                        disabled={u.id === user?.id}
-                      >
-                        <option value="SOLICITANTE">Solicitante</option>
-                        <option value="TECNICO">Técnico</option>
-                        <option value="ADMIN">Admin</option>
-                      </select>
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <button 
-                        onClick={() => handleDeleteUser(u.id)}
-                        className="btn btn-outline" 
-                        style={{ padding: '0.4rem', borderColor: 'var(--danger-color)', color: 'var(--danger-color)' }}
-                        title="Remover Usuário"
-                        disabled={u.id === user?.id}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
+                {preventives.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>Nenhum plano preventivo configurado.</td>
                   </tr>
-                ))}
+                ) : (
+                  preventives.map(p => (
+                    <tr key={p.id} style={{ borderBottom: '1px solid var(--surface-border)' }}>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ fontWeight: 600 }}>{p.title}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.category}</div>
+                      </td>
+                      <td style={{ padding: '1rem' }}>{p.machineId || 'Geral'}</td>
+                      <td style={{ padding: '1rem' }}>Cada {p.intervalDays} dias</td>
+                      <td style={{ padding: '1rem' }}>
+                        <span style={{ color: new Date(p.nextDueDate) < new Date() ? 'var(--danger-color)' : 'inherit', fontWeight: new Date(p.nextDueDate) < new Date() ? 'bold' : 'normal' }}>
+                          {new Date(p.nextDueDate).toLocaleDateString()}
+                        </span>
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        <button 
+                          onClick={() => deletePreventive(p.id)}
+                          className="btn btn-outline" 
+                          style={{ padding: '0.4rem', borderColor: 'var(--danger-color)', color: 'var(--danger-color)' }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -417,6 +528,60 @@ export const AdminPanel: React.FC = () => {
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={isCreating}>
                   {isCreating ? "Criando..." : "Criar Usuário"}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Nova Preventiva */}
+      {isPreventiveModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+          <div className="glass-panel animate-scale-in" style={{ maxWidth: '500px', width: '100%', padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0 }}>Configurar Manutenção Preventiva</h3>
+              <button onClick={() => setIsPreventiveModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreatePreventive}>
+              <div className="form-group">
+                <label className="form-label">Título do Plano</label>
+                <input type="text" required className="form-control" value={prevTitle} onChange={e => setPrevTitle(e.target.value)} placeholder="Ex: Revisão Trimestral CNC" />
+              </div>
+              <div className="grid grid-cols-2" style={{ gap: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Máquina/Ativo</label>
+                  <input type="text" className="form-control" value={prevMachine} onChange={e => setPrevMachine(e.target.value)} placeholder="Ex: CNC-01" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Intervalo (Dias)</label>
+                  <input type="number" required className="form-control" value={prevInterval} onChange={e => setPrevInterval(Number(e.target.value))} min={1} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2" style={{ gap: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Departamento</label>
+                  <input type="text" className="form-control" value={prevDept} onChange={e => setPrevDept(e.target.value)} placeholder="Ex: Usinagem" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Categoria</label>
+                  <select className="form-control" value={prevCategory} onChange={e => setPrevCategory(e.target.value as Category)}>
+                    <option value="Equipamentos">Equipamentos</option>
+                    <option value="Estruturas">Estruturas</option>
+                    <option value="Infraestrutura Administrativa">Infraestrutura</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Descrição das Atividades</label>
+                <textarea className="form-control" rows={3} value={prevDesc} onChange={e => setPrevDesc(e.target.value)} placeholder="Descreva o que deve ser verificado..." />
+              </div>
+              
+              <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
+                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsPreventiveModalOpen(false)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Criar Plano</button>
               </div>
             </form>
           </div>

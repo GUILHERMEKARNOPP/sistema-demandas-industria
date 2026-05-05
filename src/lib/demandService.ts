@@ -186,3 +186,23 @@ export const deleteUserFirestore = async (userId: string) => {
   const userRef = doc(db, 'users', userId);
   await deleteDoc(userRef);
 };
+export const createDemandFromPreventive = async (prev: PreventiveMaintenance) => {
+  const newDemand: Omit<Demand, 'id'> = {
+    title: `[PREVENTIVA] ${prev.title}`,
+    description: `Manutenção preventiva automática.\n\nAtividades:\n${prev.description}`,
+    requesterName: 'SISTEMA',
+    department: prev.department,
+    machineId: prev.machineId,
+    category: prev.category,
+    priority: 'Média',
+    status: 'Pendente',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    userId: 'system',
+    lgpdConsent: true,
+    preventive: true,
+    preventiveId: prev.id
+  };
+  
+  return await addDoc(collection(db, 'demands'), newDemand);
+};

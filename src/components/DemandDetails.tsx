@@ -140,13 +140,25 @@ export const DemandDetails: React.FC<DemandDetailsProps> = ({ demand, onUpdateSt
       }
       
       setIsConcluding(true);
+      if (!sigPad.current) {
+        throw new Error('Assinatura não encontrada. Por favor, tente novamente.');
+      }
+
       // Usamos getCanvas() em vez de getTrimmedCanvas() para evitar um bug conhecido 
       // de incompatibilidade da biblioteca interna 'trim-canvas' com o Vite em produção.
-      const canvas = sigPad.current.getCanvas();
+      let canvas;
+      if (typeof sigPad.current.getCanvas === 'function') {
+        canvas = sigPad.current.getCanvas();
+      } else if (sigPad.current._canvas) {
+        canvas = sigPad.current._canvas;
+      } else {
+        throw new Error('Não foi possível capturar a assinatura. O componente não responde.');
+      }
       
-      if (!canvas) {
-        toast.error('Erro ao acessar o quadro de assinatura.');
-        setIsConcluding(false);
+      const signatureUrl = canvas.toDataURL('image/png');
+      
+      if (sigPad.current.isEmpty && sigPad.current.isEmpty()) {
+        toast.error("Por favor, assine para concluir o serviço.");
         return;
       }
       const dataUrl = canvas.toDataURL('image/png');

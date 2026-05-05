@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Demand, Status } from '../types';
 import { DemandForm } from '../components/DemandForm';
 import { DemandDetails } from '../components/DemandDetails';
-import { subscribeToDemands, updateDemandStatus } from '../lib/demandService';
-import { Plus, Filter, Wrench, CheckCircle, AlertTriangle, Clock, ShieldAlert } from 'lucide-react';
+import { subscribeToDemands, updateDemandStatus, createDemandFromPreventive } from '../lib/demandService';
+import { checkPreventiveSchedules, updatePreventive } from '../lib/preventiveService';
+import { Plus, Filter, Wrench, CheckCircle, AlertTriangle, Clock, ShieldAlert, Shield, Calendar } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { requestNotificationPermission, sendPushNotification, playNotificationSound } from '../lib/notificationService';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -21,7 +22,32 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     // Solicita permissão de notificação push na primeira vez
     requestNotificationPermission();
-  }, []);
+    
+    // Processa manutenções preventivas
+    const processPreventives = async () => {
+      if (user?.role !== 'ADMIN') return; // Apenas o Admin dispara o processamento automático por enquanto
+      
+      const overdue = await checkPreventiveSchedules();
+      for (const prev of overdue) {
+        try {
+          await createDemandFromPreventive(prev);
+          
+          // Atualiza a próxima data da preventiva
+          const nextDate = new Date();
+          nextDate.setDate(nextDate.getDate() + prev.intervalDays);
+          
+          await updatePreventive(prev.id, {
+            lastPerformed: new Date().toISOString(),
+            nextDueDate: nextDate.toISOString()
+          });
+        } catch (error) {
+          console.error("Erro ao processar preventiva:", error);
+        }
+      }
+    };
+    
+    processPreventives();
+  }, [user]);
 
   useEffect(() => {
     const unsubscribe = subscribeToDemands((data) => {
@@ -92,12 +118,17 @@ export const Dashboard: React.FC = () => {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h2>Painel de Chamados</h2>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          {isInstallable && (
-            <button className="btn btn-outline" onClick={installPWA} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderColor: 'var(--primary-color)', color: 'var(--primary-color)' }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          {isInstallable ? (
+            <button className="btn btn-primary" onClick={installPWA} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', animation: 'pulse 2s infinite' }}>
               <Download size={18} />
-              Instalar Aplicativo
+              Instalar App
             </button>
+          ) : (
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', backgroundColor: 'rgba(0,0,0,0.05)', padding: '0.5rem 1rem', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Shield size={14} />
+              Para instalar: Use o menu do navegador
+            </div>
           )}
           {user?.role === 'SOLICITANTE' && (
             <button className="btn btn-primary" onClick={() => setIsFormOpen(true)}>
@@ -107,6 +138,25 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {!isInstallable && (
+        <div className="glass-panel" style={{ marginBottom: '2rem', padding: '1rem', borderLeft: '4px solid var(--primary-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '0.75rem', borderRadius: '12px' }}>
+              <Download size={24} color="var(--primary-color)" />
+            </div>
+            <div>
+              <h4 style={{ margin: 0 }}>Deseja usar como Aplicativo?</h4>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                No iPhone (Safari): Clique em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.
+              </p>
+            </div>
+          </div>
+          <button className="btn btn-outline" style={{ fontSize: '0.8rem' }} onClick={() => alert('No Android/Chrome: Clique nos 3 pontinhos e em "Instalar Aplicativo". No iPhone/Safari: Clique no ícone de compartilhar e em "Adicionar à Tela de Início".')}>
+            Ver Tutorial
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-4" style={{ marginBottom: '2rem' }}>
         <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>

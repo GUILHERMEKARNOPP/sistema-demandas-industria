@@ -1,8 +1,8 @@
-import { db, app } from './firebase';
+import { db } from './firebase';
 import { doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import type { UserRole } from '../types';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, deleteApp } from 'firebase/app';
 
 // Configuração para o app secundário (usado para criar usuários sem deslogar o admin)
 const firebaseConfig = {
@@ -14,9 +14,14 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-export const updateUserRole = async (userId: string, newRole: UserRole) => {
-  const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, { role: newRole });
+export const updateUserRole = async (userId: string, role: UserRole) => {
+  const userDoc = doc(db, 'users', userId);
+  return await updateDoc(userDoc, { role });
+};
+
+export const approveUser = async (userId: string, status: 'APROVADO' | 'REPROVADO') => {
+  const userDoc = doc(db, 'users', userId);
+  return await updateDoc(userDoc, { status });
 };
 
 export const deleteUser = async (userId: string) => {
@@ -42,6 +47,7 @@ export const adminCreateUser = async (name: string, email: string, role: UserRol
       name,
       email,
       role,
+      status: 'APROVADO',
       createdAt: new Date().toISOString()
     });
 
@@ -51,6 +57,6 @@ export const adminCreateUser = async (name: string, email: string, role: UserRol
     return user.uid;
   } finally {
     // Limpa o app secundário
-    await secondaryApp.delete();
+    await deleteApp(secondaryApp);
   }
 };
