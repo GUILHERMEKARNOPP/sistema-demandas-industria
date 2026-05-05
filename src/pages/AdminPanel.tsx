@@ -439,6 +439,83 @@ export const AdminPanel: React.FC = () => {
           </div>
         </div>
       )}
+      {activeTab === 'users' && (
+        <div className="animate-fade-in">
+          <div className="grid grid-cols-3" style={{ gap: '1.5rem', marginBottom: '2rem' }}>
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '0.75rem', borderRadius: '12px' }}>
+                <UserCheck color="#3b82f6" />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Total Usuários</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>{users.length}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="glass-panel" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0 }}>Gerenciamento de Usuários</h3>
+              <button className="btn btn-primary" onClick={() => setIsNewUserModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <UserPlus size={18} /> Novo Usuário
+              </button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--surface-border)' }}>
+                    <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Nome</th>
+                    <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>E-mail</th>
+                    <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Perfil / Status</th>
+                    <th style={{ padding: '1rem', color: 'var(--text-secondary)' }}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id} style={{ borderBottom: '1px solid var(--surface-border)' }}>
+                      <td style={{ padding: '1rem' }}>{u.name}</td>
+                      <td style={{ padding: '1rem' }}>{u.email}</td>
+                      <td style={{ padding: '1rem' }}>
+                        <span className={`status-badge status-${u.role === 'ADMIN' ? 'concluido' : u.role === 'TECNICO' ? 'andamento' : 'pendente'}`}>
+                          {u.role === 'ADMIN' ? 'Administrador' : u.role === 'TECNICO' ? 'Técnico' : 'Solicitante'}
+                        </span>
+                        {(u.status || 'PENDENTE') !== 'APROVADO' && (
+                          <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', backgroundColor: 'var(--danger-color)', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>
+                            AGUARDANDO
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <select 
+                            value={u.role}
+                            onChange={(e) => handleUpdateRole(u.id, e.target.value as UserRole)}
+                            className="form-control"
+                            style={{ padding: '0.2rem', fontSize: '0.8rem', width: 'auto' }}
+                            disabled={u.id === user?.id}
+                          >
+                            <option value="SOLICITANTE">Solicitante</option>
+                            <option value="TECNICO">Técnico</option>
+                            <option value="ADMIN">Administrador</option>
+                          </select>
+                          <button 
+                            onClick={() => handleDeleteUser(u.id)}
+                            className="btn btn-outline" 
+                            style={{ padding: '0.3rem', color: 'var(--danger-color)' }}
+                            disabled={u.id === user?.id}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'preventive' && (
         <div className="animate-fade-in glass-panel" style={{ padding: '2rem' }}>

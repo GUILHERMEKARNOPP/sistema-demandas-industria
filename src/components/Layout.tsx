@@ -6,8 +6,9 @@ import { Sun, Moon, LogOut, Settings, LayoutDashboard } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const Layout: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, users } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const pendingCount = users.filter(u => u.status === 'PENDENTE').length;
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -35,8 +36,27 @@ export const Layout: React.FC = () => {
               <LayoutDashboard size={20} />
             </Link>
             {user.role === 'ADMIN' && (
-              <Link to="/admin" className="btn btn-outline" style={{ padding: '0.5rem' }} title="Painel Admin">
+              <Link to="/admin" className="btn btn-outline" style={{ padding: '0.5rem', position: 'relative' }} title="Painel Admin">
                 <Settings size={20} />
+                {pendingCount > 0 && (
+                  <span style={{ 
+                    position: 'absolute', 
+                    top: '-5px', 
+                    right: '-5px', 
+                    backgroundColor: 'var(--danger-color)', 
+                    color: 'white', 
+                    borderRadius: '50%', 
+                    width: '18px', 
+                    height: '18px', 
+                    fontSize: '0.7rem', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    border: '2px solid var(--surface-card)'
+                  }}>
+                    {pendingCount}
+                  </span>
+                )}
               </Link>
             )}
             <button className="btn btn-outline" onClick={toggleTheme} style={{ padding: '0.5rem' }} title="Alternar Tema">

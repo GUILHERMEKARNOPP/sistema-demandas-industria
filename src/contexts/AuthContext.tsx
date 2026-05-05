@@ -59,6 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } else {
           setUser(null);
+          setUsers([]);
         }
       } catch (error) {
         console.error("Auth status check error:", error);
@@ -68,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Subscrição de usuários (apenas para Admin ou se necessário para o bootstrap)
+    // Subscrição de usuários - Movida para fora do listener de auth mas com tratamento de erro
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const usersData: User[] = [];
       snapshot.forEach(doc => {
@@ -76,7 +77,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setUsers(usersData);
     }, (error) => {
-      console.error("Users subscription error:", error);
+      // Se falhar (ex: sem permissão), apenas loga e mantém a lista vazia
+      console.warn("Users subscription restricted:", error.message);
     });
 
     return () => {
